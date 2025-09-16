@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ground Assessment — Reinforcement Learning</title>
+  <meta name="description" content="Interactive visualization of reinforcement learning for ground assessment with void ratio analysis." />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="assets/style.css" />
+  <style>
+    :root {
+      --bg0: #0b0f1a;
+      --bg1: #0e1628;
+      --panel: #0f182c;
+      --stroke: #253552;
+      --ink: #e7efff;
+      --muted: #9eb0d7;
+      --accent: #60a5fa;
+      --blue: #6aacff;
+      --mint: #8ef5c0;
+      --amber: #ffd66b;
+      --purple: #b49cff;
+      --card: rgba(18,26,44,.9);
+      --edge: #2a3b5d;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --error: #ef4444;
+    }
+
+    body {
+      background: radial-gradient(1200px 800px at 50% 20%, var(--bg1) 0%, var(--bg0) 55%, #090e18 100%);
+      color: var(--ink);
+      font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 16px;
+    }
+
+    .header {
+      text-align: center;
+      padding: 40px 0 20px;
+      border-bottom: 1px solid rgba(60,84,126,.25);
+    }
+
+    .header h1 {
+      margin: 0 0 8px;
+      font: 800 2.5rem/1.2 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      letter-spacing: .3px;
+      background: linear-gradient(135deg, var(--blue), var(--mint));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1.1rem;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* RL Workflow Visualization */
+    .rl-workflow {
+      display: grid;
+      grid-template-columns: 200px 1fr 200px;
+      gap: 20px;
+      align-items: center;
+      margin: 20px 0;
+      padding: 30px;
+      background: var(--card);
+      border: 1px solid var(--edge);
+      border-radius: 16px;
+      backdrop-filter: blur(8px);
+    }
+
+    .measurements {
+      text-align: center;
+    }
+
+    .measurements .icon {
+      width: 60px;
+      height: 60px;
+      margin: 0 auto 10px;
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .rl-loop {
+      position: relative;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      padding: 20px;
+      background: linear-gradient(135deg, rgba(30,45,75,.8), rgba(20,35,60,.6));
+      border: 2px solid var(--accent);
+      border-radius: 50px;
+      min-height: 120px;
+    }
+
+    .rl-component {
+      text-align: center;
+      padding: 15px;
+      background: var(--panel);
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .rl-component:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+      border-color: var(--accent);
+    }
+
+    .rl-component.active {
+      border-color: var(--success);
+      background: linear-gradient(135deg, rgba(16,185,129,.1), rgba(20,184,166,.05));
+    }
+
+    .rl-component .icon {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 8px;
+      background: linear-gradient(135deg, var(--accent), var(--mint));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .rl-component h3 {
+      margin: 0 0 6px;
+      font-size: 16px; /* match AlphaGeo card headings */
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .rl-component p {
+      margin: 4px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .arrow {
+      font-size: 24px;
+      color: var(--accent);
+      margin: 0 10px;
+    }
+
+    .output {
+      text-align: center;
+    }
+
+    .output .icon {
+      width: 60px;
+      height: 60px;
+      margin: 0 auto 10px;
+      background: linear-gradient(135deg, var(--mint), var(--amber));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Grid and Plot Layout */
+    .assessment-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin: 30px 0;
+      align-items: stretch; /* Make heights match */
+    }
+
+    /* Measurement Grid */
+    .measurement-grid {
+      background: var(--card);
+      border: 1px solid var(--edge);
+      border-radius: 16px;
+      padding: 20px;
+      backdrop-filter: blur(8px);
+      height: fit-content;
+    }
+
+    .measurement-grid h3 {
+      text-align: center;
+      margin: 0 0 6px;
+      font-size: 16px; /* match AlphaGeo */
+      font-weight: 800;
+      line-height: 1.2;
+      color: var(--ink);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(9, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 8px;
+      aspect-ratio: 3/1;
+      margin: 0 auto;
+      max-width: 450px;
+      height: 150px; /* Reduced height */
+    }
+
+    .grid-cell {
+      background: rgba(30,45,75,.6);
+      border: 1px solid var(--stroke);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      transition: all 0.5s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .measurement-marker {
+      font-size: 16px;
+      color: var(--warning);
+      opacity: 0.7;
+    }
+
+    /* Measuring phase highlight (blue) */
+    .grid-cell.cell-measuring {
+      background: linear-gradient(135deg, rgba(96,165,250,.15), rgba(96,165,250,.10));
+      border-color: var(--accent);
+      color: var(--ink);
+      box-shadow: 0 0 0 2px rgba(96,165,250,0.8), 0 0 18px rgba(96,165,250,0.45);
+      animation: pulse-blue 1.2s ease-in-out infinite;
+    }
+
+    .grid-cell.cell-measuring .measurement-marker {
+      color: var(--ink);
+      opacity: 1;
+    }
+
+    /* Measured state (green) */
+    .grid-cell.cell-measured {
+      background: linear-gradient(135deg, var(--success), rgba(16,185,129,.3));
+      border-color: var(--success);
+      color: var(--ink);
+      box-shadow: 0 0 15px rgba(16,185,129,0.3);
+    }
+
+    .grid-cell.cell-measured .measurement-marker {
+      color: var(--ink);
+      opacity: 1;
+    }
+
+    .grid-cell.measurement-point {
+      /* Neutral baseline for all cells; marker shows midpoint */
+      background: rgba(30,45,75,.6);
+      border-color: var(--stroke);
+      color: var(--muted);
+      box-shadow: none;
+    }
+
+    .grid-cell.measurement-point .measurement-marker {
+      color: var(--warning);
+      opacity: .9;
+    }
+
+    @keyframes pulse-blue {
+      0% { box-shadow: 0 0 0 2px rgba(96,165,250,0.9), 0 0 12px rgba(96,165,250,0.35); }
+      50% { box-shadow: 0 0 0 3px rgba(96,165,250,0.7), 0 0 22px rgba(96,165,250,0.55); }
+      100% { box-shadow: 0 0 0 2px rgba(96,165,250,0.9), 0 0 12px rgba(96,165,250,0.35); }
+    }
+
+    .grid-cell::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 0;
+      height: 0;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+      border-radius: 50%;
+      transition: all 0.5s ease;
+    }
+
+    .grid-cell.active::before {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Violin Plot Container */
+    .violin-container {
+      background: var(--card);
+      border: 1px solid var(--edge);
+      border-radius: 16px;
+      padding: 20px;
+      backdrop-filter: blur(8px);
+      height: fit-content;
+      min-height: 200px; /* Reduced height */
+    }
+
+    .violin-container h3 {
+      text-align: center;
+      margin: 0 0 6px;
+      font-size: 16px; /* match AlphaGeo */
+      font-weight: 800;
+      line-height: 1.2;
+      color: var(--ink);
+    }
+
+    #violin-plot {
+      width: 100%;
+      height: 160px; /* Reduced height */
+      background: rgba(15,22,36,.5);
+      border-radius: 8px;
+      border: 1px solid var(--stroke);
+    }
+
+    /* Status indicators */
+    .status {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      margin: 20px 0;
+      flex-wrap: wrap;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 20px;
+      background: rgba(20,32,56,.8);
+      border: 1px solid var(--stroke);
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .status-item.active {
+      background: linear-gradient(135deg, var(--success), rgba(16,185,129,.2));
+      border-color: var(--success);
+      color: var(--ink);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: all 0.3s ease;
+    }
+
+    .status-item.active .status-dot {
+      background: var(--success);
+      box-shadow: 0 0 10px var(--success);
+    }
+
+    /* Axis styling for violin plot */
+    .axis text { fill: var(--ink); font-size: 10px; }
+    .axis path, .axis line { stroke: rgba(99,123,168,0.35); }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .rl-workflow {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+
+      .rl-loop {
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      .arrow {
+        transform: rotate(90deg);
+        margin: 10px 0;
+      }
+
+      .assessment-layout {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+
+      .grid {
+        grid-template-columns: repeat(6, 1fr);
+        grid-template-rows: repeat(5, 1fr);
+        gap: 6px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .grid {
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(9, 1fr);
+        gap: 4px;
+      }
+
+      .grid-cell {
+        font-size: 10px;
+        padding: 2px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="site-header" role="banner" aria-label="Site header">
+    <div class="container header-inner">
+      <a class="brand" href="index.html" aria-label="Home">
+        
+        <span>Javad Ghorbani</span>
+      </a>
+      <nav class="nav" aria-label="Primary">
+        <ul>
+          <li class="nav-dropdown">
+            <a href="index.html#projects">Projects</a>
+            <div class="dropdown-menu">
+              <div class="dropdown-item has-sub">
+                <a href="ai-projects.html">Artificial Intelligence</a>
+                <div class="dropdown-submenu">
+                  <a href="ai-projects.html#overview">Overview</a>
+                  <a href="#ai-demo">Live Demo</a>
+                  <a href="#ai-code">Source Code</a>
+                  <a href="#ai-paper">Research Paper</a>
+                </div>
+              </div>
+              <div class="dropdown-item has-sub">
+                <a href="geomechanics-projects.html">Computational Geomechanics</a>
+                <div class="dropdown-submenu">
+                  <a href="geomechanics-projects.html#overview">Overview</a>
+                  <a href="#geomechanics-sim">Interactive Simulation</a>
+                  <a href="#geomechanics-docs">Documentation</a>
+                  <a href="#geomechanics-research">Research</a>
+                </div>
+              </div>
+            </div>
+          </li>
+          <li><a href="index.html#about">About</a></li>
+          <li><a class="btn btn-sm" href="index.html#contact-me">Contact</a></li>
+        </ul>
+      </nav>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="nav-drawer" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+    <div id="nav-drawer" class="nav-drawer" hidden>
+      <a href="index.html#projects">Projects</a>
+      <div class="drawer-submenu">
+        <a href="ai-projects.html">• Artificial Intelligence</a>
+        <a href="geomechanics-projects.html">• Computational Geomechanics</a>
+      </div>
+      <a href="index.html#about">About</a>
+      <a href="index.html#contact-me" class="btn btn-sm">Contact</a>
+    </div>
+  </header>
+
+  <script>
+    (function(){
+      const btn = document.querySelector('.nav-toggle');
+      const drawer = document.getElementById('nav-drawer');
+      if (!btn || !drawer) return;
+      function open(){ drawer.hidden = false; btn.setAttribute('aria-expanded','true'); document.documentElement.style.overflow = 'hidden'; }
+      function close(){ drawer.hidden = true; btn.setAttribute('aria-expanded','false'); document.documentElement.style.overflow = ''; }
+      btn.addEventListener('click', () => drawer.hidden ? open() : close());
+      drawer.addEventListener('click', (e) => { if (e.target && e.target.tagName === 'A') close(); });
+      window.addEventListener('keydown', e => { if (e.key === 'Escape' && !drawer.hidden) close(); });
+    })();
+  </script>
+
+  <main id="main">
+  <div class="container">
+    <header class="header">
+      <div class="back-row" style="display:flex; justify-content:space-between; align-items:center; margin: 0 0 6px;">
+        <h2 style="margin:0; background: linear-gradient(135deg, #7bd4ff, #8ef5c0); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;">Ground Assessment — Reinforcement Learning</h2>
+        <a class="btn btn-ghost" href="ai-projects.html">Back</a>
+      </div>
+      <h3 style="margin:10px 0 6px;">Abstract</h3>
+      <p class="lede" style="max-width:80ch; margin:0 auto;">A novel AI‑driven tool converts deflection test results into key soil parameters required for compaction QA, including density and void ratio. Determining these properties in unsaturated soils is challenging due to the interplay among suction, moisture content, void ratio, and measured deflections. Our approach integrates unsaturated soil mechanics with advanced AI—particularly reinforcement learning—to fuse in‑situ sensing, experimental observations, and physics‑based finite‑element modeling. The system adapts online to changing field conditions, enabling real‑time, accurate inference without directly measuring moisture content or suction.</p>
+      <p class="micro" style="max-width:80ch; margin:8px auto 0; color:#a9b8d6;">Animation guide: The RL loop cycles through Measurement → Estimation → Learning. The left grid highlights the active test location; the violin panel updates the inferred void‑ratio distribution for that location. Status chips below indicate the current phase.</p>
+      <h3 style="margin:12px 0 6px;">Publications & Repositories</h3>
+      <div class="btn-row" style="justify-content:center; margin-top:10px;">
+        <a id="btnPubs" class="btn" href="#">Publications</a>
+        <a id="btnRepos" class="btn btn-ghost" href="#">Repositories</a>
+      </div>
+      <div id="pubList" class="card" style="display:none; margin-top:10px;"></div>
+      <div id="repoList" class="card" style="display:none; margin-top:10px;"></div>
+      <h3 style="margin:12px 0 6px;">Technologies</h3>
+      <div class="card-tags" style="justify-content:center;">
+        <span class="tag">Reinforcement Learning (Monte Carlo policy)</span>
+        <span class="tag">PSO</span>
+        <span class="tag">Python</span>
+        <span class="tag">Finite Element Modeling</span>
+        <span class="tag">Real‑Time Sensing</span>
+        <span class="tag">Unsaturated Soil Mechanics</span>
+      </div>
+    </header>
+
+    <!-- RL Workflow Visualization -->
+    <section class="rl-workflow">
+      <div class="measurements">
+        <div class="icon">📊</div>
+        <h3>Measurements</h3>
+        <p>Soil parameters, environmental data, and site conditions</p>
+      </div>
+
+      <div class="rl-loop">
+        <div class="rl-component active" id="measurement">
+          <div class="icon" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 20 C5 10, 19 10, 21 20" stroke="#60a5fa" stroke-width="2" fill="rgba(96,165,250,0.18)"/>
+              <line x1="3" y1="20.5" x2="21" y2="20.5" stroke="#93c5fd" stroke-width="1"/>
+            </svg>
+          </div>
+          <h3>Measurement</h3>
+          <p>Collect soil measurements at grid midpoints</p>
+        </div>
+
+        <div class="arrow">→</div>
+
+        <div class="rl-component" id="estimation">
+          <div class="icon">📊</div>
+          <h3>Estimation</h3>
+          <p>Predict void ratio distribution for the measured cell</p>
+        </div>
+
+        <div class="arrow">→</div>
+
+        <div class="rl-component" id="learning">
+          <div class="icon">🧠</div>
+          <h3>Learning</h3>
+          <p>Update policy from measurement–prediction comparison</p>
+        </div>
+      </div>
+
+      <div class="output">
+        <div class="icon">📈</div>
+        <h3>Void Ratio Analysis</h3>
+        <p>Optimized soil void ratio distributions</p>
+      </div>
+    </section>
+
+    <!-- Assessment Layout: Grid + Violin Plots -->
+    <div class="assessment-layout">
+      <!-- Measurement Grid -->
+      <div class="measurement-grid">
+        <h3>Measurement Grid (3×9)</h3>
+        <div class="grid" id="measurementGrid">
+          <!-- Grid cells will be generated by JavaScript -->
+        </div>
+      </div>
+
+      <!-- Violin Plot -->
+      <div class="violin-container">
+        <h3>Void Ratio Analysis</h3>
+        <div id="violin-plot"></div>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div class="status">
+      <div class="status-item active" id="measurementStatus">
+        <div class="status-dot"></div>
+        <span>Measurement</span>
+      </div>
+      <div class="status-item" id="estimationStatus">
+        <div class="status-dot"></div>
+        <span>Estimation</span>
+      </div>
+      <div class="status-item" id="learningStatus">
+        <div class="status-dot"></div>
+        <span>Learning</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    // Publications/Repositories toggles
+    document.addEventListener('DOMContentLoaded', function(){
+      const pubsBtn = document.getElementById('btnPubs');
+      const pubList = document.getElementById('pubList');
+      const reposBtn = document.getElementById('btnRepos');
+      const repoList = document.getElementById('repoList');
+      if (pubsBtn && pubList){
+        const pubsHtml = [
+          'Ghorbani, J. and Kodikara, J., 2024. Real-time inference of compacted soil properties using deflection tests: an AI-driven solution informed by unsaturated soil mechanics principles. Computers and Geotechnics, 173, p.106543.',
+          'Ghorbani, J. and Kodikara, J., 2024, October. From non-destructive testing to ground property inference: integration of AI and unsaturated soil dynamics. In International conference on transportation geotechnics (pp. 183-189). Singapore: Springer Nature Singapore.'
+        ].map(s=>`<div style="margin:6px 0;">${s}</div>`).join('');
+        pubsBtn.addEventListener('click', function(ev){
+          ev.preventDefault();
+          if (pubList.style.display === 'none'){ pubList.innerHTML = pubsHtml; pubList.style.display = 'block'; }
+          else { pubList.style.display = 'none'; }
+        });
+      }
+      if (reposBtn && repoList){
+        const emptyHtml = '<div style="margin:6px 0; color:#a9b8d6;">Repositories coming soon.</div>';
+        reposBtn.addEventListener('click', function(ev){
+          ev.preventDefault();
+          if (repoList.style.display === 'none'){ repoList.innerHTML = emptyHtml; repoList.style.display = 'block'; }
+          else { repoList.style.display = 'none'; }
+        });
+      }
+    });
+
+    // RL Workflow Animation and Control
+    class RLWorkflow {
+      constructor() {
+        this.components = ['measurement', 'estimation', 'learning'];
+        this.currentStep = 0;
+        this.gridSize = 27; // 3x9 grid
+        this.currentGridIndex = 0; // which cell we're working on
+        this.isRunning = false;
+        this.interval = null;
+
+        this.init();
+      }
+
+      init() {
+        // Create the measurement grid
+        this.createMeasurementGrid();
+
+        // Initialize violin plot
+        this.initViolinPlot();
+
+        // Start auto-play
+        this.startAutoPlay();
+      }
+
+      createMeasurementGrid() {
+        const gridContainer = document.getElementById('measurementGrid');
+
+        for (let i = 0; i < this.gridSize; i++) {
+          const cell = document.createElement('div');
+          cell.className = 'grid-cell measurement-point';
+          cell.innerHTML = '<div class="measurement-marker">•</div>';
+
+          gridContainer.appendChild(cell);
+        }
+
+        this.gridCells = gridContainer.children;
+      }
+
+      startAutoPlay() {
+        this.isRunning = true;
+        this.currentGridIndex = 0;
+
+        this.interval = setInterval(() => {
+          this.step();
+        }, 1200);
+      }
+
+      step() {
+        const currentPhase = this.components[this.currentStep];
+
+        // Update RL component and status active states
+        this.components.forEach((comp, index) => {
+          const element = document.getElementById(comp);
+          const statusElement = document.getElementById(comp + 'Status');
+          if (index === this.currentStep) {
+            element.classList.add('active');
+            statusElement.classList.add('active');
+          } else {
+            element.classList.remove('active');
+            statusElement.classList.remove('active');
+          }
+        });
+
+        // Handle phase-specific actions
+        if (currentPhase === 'measurement') {
+          this.handleMeasurementPhase();
+        } else if (currentPhase === 'estimation') {
+          this.handleEstimationPhase();
+        } else if (currentPhase === 'learning') {
+          this.handleLearningPhase();
+        }
+
+        // Move to next phase
+        this.currentStep = (this.currentStep + 1) % this.components.length;
+
+        // Stop when all cells processed
+        if (this.currentGridIndex >= this.gridSize && this.currentStep === 0) {
+          clearInterval(this.interval);
+          this.isRunning = false;
+        }
+      }
+
+      handleMeasurementPhase() {
+        // Clear previous measuring highlight
+        for (let i = 0; i < this.gridCells.length; i++) {
+          this.gridCells[i].classList.remove('cell-measuring');
+        }
+        if (this.currentGridIndex < this.gridSize) {
+          this.gridCells[this.currentGridIndex].classList.add('cell-measuring');
+        }
+      }
+
+      handleEstimationPhase() {
+        // Show violin for the currently measured cell only now
+        if (this.currentGridIndex < this.gridSize) {
+          this.voidRatioData[this.currentGridIndex].active = true;
+          this.renderViolinGrid();
+        }
+      }
+
+      handleLearningPhase() {
+        // Finalize the current cell as measured (green) and advance
+        if (this.currentGridIndex < this.gridSize) {
+          this.gridCells[this.currentGridIndex].classList.remove('cell-measuring');
+          this.gridCells[this.currentGridIndex].classList.add('cell-measured');
+          this.currentGridIndex++;
+        }
+      }
+
+      initViolinPlot() {
+        this.svg = d3.select('#violin-plot')
+          .append('svg')
+          .attr('width', '100%')
+          .attr('height', '100%')
+          .attr('viewBox', '0 0 450 160')
+          .attr('preserveAspectRatio', 'xMidYMid meet');
+
+        this.margin = {top: 6, right: 8, bottom: 16, left: 36};
+        this.width = 450 - this.margin.left - this.margin.right;
+        this.height = 160 - this.margin.top - this.margin.bottom;
+
+        this.g = this.svg.append('g')
+          .attr('transform', `translate(${this.margin.left},${this.margin.top})`);
+
+        // One-row violin ribbon (visible window = 9)
+        this.cellWidth = this.width / 9;
+        this.cellHeight = this.height;
+
+        // Initialize data for all grid points
+        this.voidRatioData = [];
+        for (let i = 0; i < this.gridSize; i++) {
+          this.voidRatioData.push({
+            gridIndex: i,
+            active: false,
+            voidRatioData: this.generateVoidRatioDistribution(i),
+            row: 0,
+            col: i
+          });
+        }
+
+        this.renderViolinGrid();
+      }
+
+      generateVoidRatioDistribution(index) {
+        // Generate realistic void ratio distributions for different soil types
+        const soilTypes = [
+          {name: 'sand', range: [0.3, 0.8], mean: 0.55},
+          {name: 'silt', range: [0.35, 0.9], mean: 0.625},
+          {name: 'clay', range: [0.4, 1.2], mean: 0.8},
+          {name: 'loam', range: [0.45, 1.0], mean: 0.725}
+        ];
+
+        // Use index to deterministically select soil type (for consistency)
+        const soilType = soilTypes[index % soilTypes.length];
+
+        // Generate distribution data
+        const data = [];
+        const numSamples = 30;
+        for (let i = 0; i < numSamples; i++) {
+          // Create a distribution around the mean with some variance
+          const value = soilType.mean + (Math.random() - 0.5) * (soilType.range[1] - soilType.range[0]) * 0.3;
+          data.push(Math.max(soilType.range[0], Math.min(soilType.range[1], value)));
+        }
+        return data;
+      }
+
+      renderViolinGrid() {
+        // Rebuild axis and viewport each render
+        this.g.selectAll('*').remove();
+
+        // Shared Y-axis with ticks and label
+        this.sharedY = d3.scaleLinear()
+          .domain([0.2, 1.5])
+          .range([this.height, 0]);
+
+        this.g.append('g')
+          .attr('class', 'axis')
+          .call(d3.axisLeft(this.sharedY).ticks(5));
+
+        this.g.append('text')
+          .attr('x', -this.margin.left + 6)
+          .attr('y', -2)
+          .attr('fill', 'var(--ink)')
+          .attr('text-anchor', 'start')
+          .style('font-size', '10px')
+          .text('Void ratio');
+
+        const viewport = this.g.append('g').attr('transform','translate(24,0)');
+
+        // Determine scroll offset based on last active index
+        const maxActiveIdx = this.voidRatioData.reduce((m, d, i) => d.active ? Math.max(m, i) : m, -1);
+        const scrollOffset = Math.max(0, maxActiveIdx - 8);
+
+        // Create groups for each grid cell
+        const cellGroups = viewport.selectAll('.violin-cell')
+          .data(this.voidRatioData)
+          .enter().append('g')
+          .attr('class', 'violin-cell')
+          .attr('transform', d => `translate(${(d.col - scrollOffset) * this.cellWidth}, 0)`);
+
+        // Only render violins for active cells
+        cellGroups.each((d, i, nodes) => {
+          if (!d.active) return;
+
+          const cellGroup = d3.select(nodes[i]);
+
+          // Create local scales for this cell
+          const localY = this.sharedY.copy().range([this.cellHeight - 5, 5]);
+
+          // Compute kernel density estimation
+          const density = this.kernelDensityEstimator(this.kernelEpanechnikov(0.15), d3.range(0.2, 1.5, 0.05))(d.voidRatioData);
+
+          // Scale for the violin width
+          const maxDensity = d3.max(density, dd => dd[1]);
+          const scale = (this.cellWidth * 0.8) / (2 * maxDensity);
+
+          // Create violin path
+          const violinPath = 'M0,0' +
+            density.map(dd => `L${dd[1] * scale},${localY(dd[0])}`).join('') +
+            'L0,' + localY(d3.min(d.voidRatioData)) +
+            density.slice().reverse().map(dd => `L${-dd[1] * scale},${localY(dd[0])}`).join('') +
+            'Z';
+
+          cellGroup.append('path')
+            .attr('d', violinPath)
+            .attr('transform', `translate(${this.cellWidth / 2}, 0)`)
+            .style('fill', d => {
+              const colors = ['#60a5fa', '#8ef5c0', '#ffd66b', '#b49cff'];
+              return colors[d.gridIndex % colors.length];
+            })
+            .style('opacity', 0.7)
+            .style('stroke', 'var(--ink)')
+            .style('stroke-width', 0.5);
+
+          // Add median line
+          const median = d3.median(d.voidRatioData);
+          cellGroup.append('line')
+            .attr('x1', this.cellWidth / 2 - this.cellWidth * 0.2)
+            .attr('x2', this.cellWidth / 2 + this.cellWidth * 0.2)
+            .attr('y1', localY(median))
+            .attr('y2', localY(median))
+            .style('stroke', 'var(--ink)')
+            .style('stroke-width', 1);
+        });
+      }
+
+      // updateViolinPlot removed in favor of phase-specific rendering
+
+      // Kernel density estimation functions
+      kernelEpanechnikov(k) {
+        return v => Math.abs(v /= k) <= 1 ? 0.75 * (1 - v * v) / k : 0;
+      }
+
+      kernelDensityEstimator(kernel, x) {
+        return values => x.map(x => [x, d3.mean(values, v => kernel(x - v))]);
+      }
+
+    }
+
+    // Initialize when DOM is loaded
+    document.addEventListener('DOMContentLoaded', () => {
+      new RLWorkflow();
+    });
+  </script>
+  </main>
+</body>
+</html>

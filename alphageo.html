@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AlphaGeo — Constitutive Modeling Automation and Automatic Calibration</title>
+  <meta name="description" content="AlphaGeo: Explorer, Self‑Play, Learner, and MCTS pipeline for automated parameter identification and calibration." />
+  <link rel="stylesheet" href="assets/style.css" />
+  
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="site-header" role="banner" aria-label="Site header">
+    <div class="container header-inner">
+      <a class="brand" href="index.html" aria-label="Home"><span>Javad Ghorbani</span></a>
+      <nav class="nav" aria-label="Primary">
+        <ul>
+          <li class="nav-dropdown">
+            <a href="index.html#projects">Projects</a>
+            <div class="dropdown-menu">
+              <div class="dropdown-item has-sub">
+                <a href="ai-projects.html">Artificial Intelligence</a>
+                <div class="dropdown-submenu">
+                  <a href="ai-projects.html#overview">Overview</a>
+                  <a href="#ai-demo">Live Demo</a>
+                  <a href="#ai-code">Source Code</a>
+                  <a href="#ai-paper">Research Paper</a>
+                </div>
+              </div>
+              <div class="dropdown-item has-sub">
+                <a href="geomechanics-projects.html">Computational Geomechanics</a>
+                <div class="dropdown-submenu">
+                  <a href="geomechanics-projects.html#overview">Overview</a>
+                  <a href="#geomechanics-sim">Interactive Simulation</a>
+                  <a href="#geomechanics-docs">Documentation</a>
+                  <a href="#geomechanics-research">Research</a>
+                </div>
+              </div>
+            </div>
+          </li>
+          <li><a href="index.html#about">About</a></li>
+          <li><a class="btn btn-sm" href="index.html#contact-me">Contact</a></li>
+        </ul>
+      </nav>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="nav-drawer" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+    <div id="nav-drawer" class="nav-drawer" hidden>
+      <a href="index.html#projects">Projects</a>
+      <div class="drawer-submenu">
+        <a href="ai-projects.html">• Artificial Intelligence</a>
+        <a href="geomechanics-projects.html">• Computational Geomechanics</a>
+      </div>
+      <a href="index.html#about">About</a>
+      <a href="index.html#contact-me" class="btn btn-sm">Contact</a>
+    </div>
+  </header>
+
+  <script>
+    (function(){
+      const btn = document.querySelector('.nav-toggle');
+      const drawer = document.getElementById('nav-drawer');
+      if (!btn || !drawer) return;
+      function open(){ drawer.hidden = false; btn.setAttribute('aria-expanded','true'); document.documentElement.style.overflow = 'hidden'; }
+      function close(){ drawer.hidden = true; btn.setAttribute('aria-expanded','false'); document.documentElement.style.overflow = ''; }
+      btn.addEventListener('click', () => drawer.hidden ? open() : close());
+      drawer.addEventListener('click', (e) => { if (e.target && e.target.tagName === 'A') close(); });
+      window.addEventListener('keydown', e => { if (e.key === 'Escape' && !drawer.hidden) close(); });
+    })();
+  </script>
+
+  <main id="main">
+    <!-- SELF-PLAY + MCTS PARAMETER IDENTIFICATION -->
+    <section id="alpha-calibration" class="stripe alpha-anim" aria-label="Self-Play and MCTS parameter identification">
+      <div class="container">
+        <div class="back-row" style="display:flex; justify-content:space-between; align-items:center; margin: 0 0 12px;">
+          <h2 style="margin:0; background: linear-gradient(135deg, #7bd4ff, #8ef5c0); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;">AlphaGeo — Constitutive Modeling Automation and Automatic Calibration</h2>
+          <a class="btn btn-ghost" href="ai-projects.html">Back</a>
+        </div>
+        <header style="text-align:center; margin-bottom: 10px;">
+          <h3 style="margin:10px 0 6px;">Abstract</h3>
+          <p class="lede" style="max-width:80ch; margin:0 auto;">AlphaGeo is a multi‑agent pipeline for automating constitutive modelling: it configures models, performs parameter identification, and calibrates to data with minimal manual effort. The workflow: (1) Explorer samples parameters and initial conditions within bounds; (2) Self‑Play builds a surrogate dataset from states S and deltas D; (3) Learner trains a mapping f: X→ΔA to predict parameter updates; (4) MCTS refines ΔA to minimize calibration error.</p>
+          <p class="micro" style="max-width:80ch; margin:8px auto 0; color:#a9b8d6;">Animation guide: The left panels show the Explorer’s bounds and Self‑Play trials; the center panel tracks Learner training; the right panel animates MCTS iterations. The final panel compares baseline, final prediction, and observations with a legend.</p>
+          <h3 style="margin:12px 0 6px;">Publications & Repositories</h3>
+          <div class="btn-row" style="justify-content:center;">
+            <a id="btnPubs" class="btn" href="#">Publications</a>
+            <a id="btnRepos" class="btn btn-ghost" href="#">Repositories</a>
+          </div>
+          <div id="pubList" class="card" style="display:none; margin-top:10px;"></div>
+          <div id="repoList" class="card" style="display:none; margin-top:10px;"></div>
+          <h3 style="margin:12px 0 6px;">Technologies</h3>
+          <div class="card-tags" style="justify-content:center;">
+            <span class="tag">Python</span>
+            <span class="tag">PyTorch</span>
+            <span class="tag">TensorFlow</span>
+            <span class="tag">HDF5</span>
+            <span class="tag">Multi‑Agent System</span>
+            <span class="tag">Semi‑Supervised Learning</span>
+            <span class="tag">MCTS</span>
+          </div>
+        </header>
+
+        <style>
+          .alpha-anim .grid-anim{ display:grid; gap:14px; }
+          .alpha-anim .grid-anim-1{ grid-template-columns: 1fr; justify-items: center; }
+          .alpha-anim .grid-anim-2{ grid-template-columns: 1fr 1fr; }
+          .alpha-anim .grid-anim-3{ grid-template-columns: 1fr 1fr 1fr; }
+          .alpha-anim .card-plot{ background:var(--card); border:1px solid var(--stroke); border-radius:14px; padding:10px; box-shadow: var(--shadow); }
+          .alpha-anim .card-plot h3{ margin: 0 0 6px; font-size: 16px; }
+          .alpha-anim .meta-row{ display:flex; gap:10px; flex-wrap:wrap; color:#a9b8d6; font-size:12px; margin:6px 0 0; }
+          .alpha-anim .card-plot.narrow{ width:min(720px, 100%); }
+          @media (max-width: 1100px){ .alpha-anim .grid-anim-3{ grid-template-columns: 1fr 1fr; } }
+          @media (max-width: 900px){ .alpha-anim .grid-anim-3, .alpha-anim .grid-anim-2, .alpha-anim .grid-anim-1{ grid-template-columns: 1fr; } }
+        </style>
+
+        <!-- Row 1: Explorer + Self-Play -->
+        <div class="grid-anim grid-anim-2">
+          <article class="card-plot">
+            <h3>Explorer Agent (adjust A, G within bounds)</h3>
+            <p class="micro" style="margin:2px 0 8px; color:#a9b8d6;">
+              Explorer samples A (model parameters [a₁..a_M]) and G (initial conditions [g₁..g_NIC]) within their bounds. Each sample yields a prediction yᵢ and a delta Δyᵢ = yᵢ − y₀ (vs baseline y₀). States are S = {(x, y₀)} and deltas are D = {Δyᵢ}; together they form X = {S, D} for the learner.
+            </p>
+            <div id="explorerSvg" role="img" aria-label="Explorer agent parameter adjustments"></div>
+          </article>
+          <article class="card-plot">
+            <h3>Self‑Play Trials (build X={S,D}, Y=ΔA)</h3>
+            <p class="micro" style="margin:2px 0 8px; color:#a9b8d6;">
+              X collects states S and differences D where S = {(x, y₀)} are baseline input‑output pairs, D = {Δyᵢ} are per‑trial prediction deltas; A are model parameters [a₁..a_M]; G are initial conditions [g₁..g_NIC].
+            </p>
+            <div id="selfplaySvg" role="img" aria-label="Self-play trials plot"></div>
+            <div class="meta-row" id="alphaMetaLeft" aria-live="polite"></div>
+          </article>
+        </div>
+
+        <!-- Row 2: Learner centered -->
+        <div class="grid-anim grid-anim-1" style="margin-top: 14px;">
+          <article class="card-plot narrow">
+            <h3>Learner Agent (train surrogate f: X → ΔA)</h3>
+            <div id="learnerSvg" role="img" aria-label="Learner agent training visualization"></div>
+          </article>
+        </div>
+
+        <div class="grid-anim grid-anim-2" style="margin-top: 14px;">
+          <!-- MCTS panel -->
+          <article class="card-plot">
+            <h3>MCTS (selection → expansion → simulation → backprop)</h3>
+            <div id="mctsSvg" role="img" aria-label="MCTS tree visualization"></div>
+            <div class="meta-row" id="alphaMetaRight" aria-live="polite"></div>
+          </article>
+
+          <!-- Final parameters panel -->
+          <article class="card-plot">
+            <h3>Final Parameter Finding</h3>
+            <div id="finalSvg" role="img" aria-label="Final parameters and curve"></div>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    (function(){
+      // Publications (Harvard style) toggle
+      const pubsBtn = document.getElementById('btnPubs');
+      const pubList = document.getElementById('pubList');
+      const reposBtn = document.getElementById('btnRepos');
+      const repoList = document.getElementById('repoList');
+      if (pubsBtn && pubList){
+        const pubsHtml = [
+          'Ghorbani, J., Aghdasi, S., Nazem, M., McCartney, J.S. and Kodikara, J., 2024. Parameters in play: AlphaZero-Inspired AI for autonomous parameter identification in soil constitutive and finite element models. Computers and Geotechnics, 174, p.106657.',
+          'Ghorbani, J.*, Nazem, M. and Moridpour, S., 2025. Automatic Parameter Identification of an Advanced Plasticity Model for Saturated Soils in Offshore Geomechanics. Proceedings of ISFOG 2025 (5th International Symposium on Frontiers in Offshore Geotechnics), Nantes, France (June 9–13, 2025).'
+        ].map(s=>`<div style="margin:6px 0;">${s}</div>`).join('');
+        pubsBtn.addEventListener('click', function(ev){
+          ev.preventDefault();
+          if (pubList.style.display === 'none'){
+            pubList.innerHTML = pubsHtml;
+            pubList.style.display = 'block';
+          } else {
+            pubList.style.display = 'none';
+          }
+        });
+      }
+
+      if (reposBtn && repoList){
+        const reposHtml = [
+          { title:'MCTS‑based Optimizer', href:'https://github.com/jghorbani2/MCTS-based_optimizer' }
+        ].map(r=>`<div style=\"margin:6px 0;\"><a href=\"${r.href}\" target=\"_blank\" rel=\"noopener\">${r.title}</a></div>`).join('');
+        reposBtn.addEventListener('click', function(ev){
+          ev.preventDefault();
+          if (repoList.style.display === 'none'){
+            repoList.innerHTML = reposHtml;
+            repoList.style.display = 'block';
+          } else {
+            repoList.style.display = 'none';
+          }
+        });
+      }
+
+      const explorerHost = document.getElementById('explorerSvg');
+      const leftHost = document.getElementById('selfplaySvg');
+      const learnerHost = document.getElementById('learnerSvg');
+      const rightHost = document.getElementById('mctsSvg');
+      const finalHost = document.getElementById('finalSvg');
+      const metaL = document.getElementById('alphaMetaLeft');
+      const metaR = document.getElementById('alphaMetaRight');
+      if (!leftHost || !rightHost) return;
+
+      const W1 = 500, H1 = 220, M1 = {top:14,right:10,bottom:28,left:36};
+      const svg1 = d3.select(leftHost).append('svg').attr('width','100%').attr('height',H1)
+        .attr('viewBox',`0 0 ${W1} ${H1}`).attr('preserveAspectRatio','xMidYMid meet');
+      const g1 = svg1.append('g').attr('transform',`translate(${M1.left},${M1.top})`);
+      const w1 = W1 - M1.left - M1.right, h1 = H1 - M1.top - M1.bottom;
+      const x1 = d3.scaleLinear().domain([0, 1]).range([0, w1]);
+      const y1 = d3.scaleLinear().domain([0, 1]).range([h1, 0]);
+      g1.append('g').attr('transform',`translate(0,${h1})`).call(d3.axisBottom(x1).ticks(6));
+      g1.append('g').call(d3.axisLeft(y1).ticks(5));
+      g1.append('text').attr('x',0).attr('y',-4).text('Self‑Play Trials').attr('fill','currentColor').style('font-size','12px');
+
+      const M = 3, NIC = 2, NT = 40; // params, initial conditions, trials
+      let trialIndex = 0, running = true, raf = null, stepQueue = 0, currentPhase = 'selfplay';
+      const A = [0.3, 0.6, 0.2];
+      const Amin = [0.0, 0.2, 0.1];
+      const Amax = [0.8, 0.9, 0.6];
+      const G0 = [0.4, 0.7];
+      const Gmin = [0.2, 0.4];
+      const Gmax = [0.7, 0.9];
+
+      function sampleUniform(min, max){ return min + Math.random()*(max-min); }
+      function randn(){ let u=0,v=0; while(!u) u=Math.random(); while(!v) v=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+
+      function H_model(x, Avals, Gvals){
+        const a0=Avals[0], a1=Avals[1], a2=Avals[2];
+        const g0=Gvals[0], g1=Gvals[1];
+        const base = a0 + a1*x + a2*Math.sin(2*Math.PI*x*g0) + 0.05*(g1-0.5);
+        return Math.max(0, Math.min(1, base));
+      }
+
+      const xgrid = d3.range(0, 1.0001, 1/24);
+      const baselineY = xgrid.map(x => H_model(x, A, G0));
+      const AtrueHidden = A.map((a,j)=>{ const delta = [0.28, -0.28, 0.22][j] || 0.18; const v = a + delta; const lo = Amin[j] ?? 0, hi = Amax[j] ?? 1; return Math.max(lo, Math.min(hi, v)); });
+      const YOBS = xgrid.map(x => Math.max(0, Math.min(1, H_model(x, AtrueHidden, G0) + 0.006*randn())));
+      const basePath = d3.line().x(d=>x1(d.x)).y(d=>y1(d.y));
+      g1.append('path').datum(xgrid.map((x,i)=>({x, y: baselineY[i]}))).attr('fill','none').attr('stroke','#7bd4ff').attr('stroke-width',1.5).attr('opacity',0.9).attr('d', basePath);
+      const legend = svg1.append('g').attr('transform',`translate(${W1-160},${H1-72})`);
+      legend.append('line').attr('x1',0).attr('y1',6).attr('x2',20).attr('y2',6).attr('stroke','#7bd4ff').attr('stroke-width',2);
+      legend.append('text').attr('x',26).attr('y',9).attr('fill','currentColor').style('font-size','11px').text('Baseline');
+      legend.append('line').attr('x1',0).attr('y1',24).attr('x2',20).attr('y2',24).attr('stroke','#999').attr('stroke-width',2).attr('stroke-dasharray','4,4');
+      legend.append('text').attr('x',26).attr('y',27).attr('fill','currentColor').style('font-size','11px').text('Trials');
+      const trialsLayer = g1.append('g');
+      const dataset = { X: [], Y: [] };
+
+      let ex;
+      if (explorerHost){
+        const exW=500, exH=220;
+        const exSvg = d3.select(explorerHost).append('svg').attr('width','100%').attr('height',exH)
+          .attr('viewBox',`0 0 ${exW} ${exH}`).attr('preserveAspectRatio','xMidYMid meet');
+        const g = exSvg.append('g').attr('transform','translate(16,16)');
+        const items = [
+          { key:'A0', min:Amin[0], max:Amax[0], base:A[0] },
+          { key:'A1', min:Amin[1], max:Amax[1], base:A[1] },
+          { key:'A2', min:Amin[2], max:Amax[2], base:A[2] },
+          { key:'G0', min:Gmin[0], max:Gmax[0], base:G0[0] },
+          { key:'G1', min:Gmin[1], max:Gmax[1], base:G0[1] }
+        ];
+        const x = d3.scaleLinear().domain([0,1]).range([0, 360]);
+        const rowH = 28;
+        g.append('text').attr('x',0).attr('y',-2).attr('fill','currentColor').style('font-size','12px').text('Parameter bounds and samples');
+        const rows = g.selectAll('.row').data(items).enter().append('g').attr('class','row').attr('transform',(d,i)=>`translate(0,${i*rowH+12})`);
+        rows.append('text').attr('x',0).attr('y',0).attr('fill','currentColor').style('font-size','11px').text(d=>d.key);
+        rows.append('rect').attr('x',36).attr('y',-8).attr('width', x(1)).attr('height', 10).attr('fill','#0f172a').attr('stroke','#27324a');
+        rows.append('circle').attr('class','base').attr('cx', d=>x(d.base)+36).attr('cy',-3).attr('r',4).attr('fill','#7bd4ff').append('title').text('Baseline');
+        rows.append('circle').attr('class','cur').attr('cx', d=>x(d.base)+36).attr('cy',-3).attr('r',4).attr('fill','#8ef5c0').attr('opacity',0.9).append('title').text('Current sample');
+        rows.append('circle').attr('cx', d=>x(d.min)+36).attr('cy',-3).attr('r',2.5).attr('fill','#a9b8d6');
+        rows.append('circle').attr('cx', d=>x(d.max)+36).attr('cy',-3).attr('r',2.5).attr('fill','#a9b8d6');
+        const label = g.append('text').attr('x',0).attr('y', rowH*items.length + 16).attr('fill','#a9b8d6').style('font-size','11px').text('Waiting for self‑play...');
+        ex = { g, x, rows, label };
+        function updateExplorer(Ai, Gi){
+          const vals = [Ai[0], Ai[1], Ai[2], Gi[0], Gi[1]];
+          ex.rows.selectAll('circle.cur').attr('cx', (d,i)=> ex.x(vals[i]) + 36);
+          ex.label.text(`Trial ${trialIndex+1}: Aᵢ=[${Ai.map(v=>v.toFixed(2)).join(', ')}], Gᵢ=[${Gi.map(v=>v.toFixed(2)).join(', ')}]`);
+        }
+        window.__updateExplorer = updateExplorer;
+      }
+
+      function doTrial(){
+        if (trialIndex >= NT) return false;
+        const Ai = A.map((a,j)=> sampleUniform(Amin[j], Amax[j]));
+        const Gi = G0.map((g,k)=> sampleUniform(Gmin[k], Gmax[k]));
+        const Yi = xgrid.map(x => H_model(x, Ai, Gi));
+        const Di = Yi.map((y,i)=> y - baselineY[i]);
+        const S_sample = xgrid.filter((_,i)=> i%4===0).map((x,i)=> ({ x, y: baselineY[i*4] }));
+        const d_sample = Di.filter((_,i)=> i%4===0);
+        const Xi = { S: S_sample, D: d_sample };
+        const dA = Ai.map((v,j)=> v - A[j]);
+        dataset.X.push(Xi); dataset.Y.push(dA);
+        const color = d3.interpolateTurbo(trialIndex/NT);
+        trialsLayer.append('path').datum(xgrid.map((x,i)=>({x, y: Yi[i]}))).attr('fill','none').attr('stroke', color).attr('stroke-width', 1).attr('stroke-dasharray','4,4').attr('opacity', 0.6).attr('d', basePath);
+        if (window.__updateExplorer) window.__updateExplorer(Ai, Gi);
+        trialIndex++;
+        updateLeftMeta();
+        return true;
+      }
+
+      function updateLeftMeta(){ if (!metaL) return; const k = dataset.Y.length; const last = dataset.Y[k-1] || [0,0,0]; metaL.textContent = `Trials: ${k}/${NT} • Last ΔA: [${last.map(v=>v.toFixed(2)).join(', ')}]`; }
+
+      let learningStarted = false, learningProgress = 0, surrogateReady = false, learnerVis = null;
+      function startLearning(){
+        if (!learnerHost || learningStarted) return;
+        learningStarted = true; currentPhase = 'learning'; learningProgress = 0;
+        const LW=500, LH=220;
+        const svg = d3.select(learnerHost).html('').append('svg').attr('width','100%').attr('height',LH)
+          .attr('viewBox',`0 0 ${LW} ${LH}`).attr('preserveAspectRatio','xMidYMid meet');
+        const g = svg.append('g').attr('transform','translate(20,20)');
+        g.append('text').attr('x',0).attr('y',0).attr('fill','currentColor').style('font-size','12px').text('Training surrogate f: X={S,D} → ΔA');
+        const barW = 360, barH = 16;
+        g.append('rect').attr('x',0).attr('y',24).attr('width',barW).attr('height',barH).attr('fill','#0f172a').attr('stroke','#27324a');
+        const fill = g.append('rect').attr('x',0).attr('y',24).attr('width',0).attr('height',barH).attr('fill','#8ef5c0');
+        const t1 = g.append('text').attr('x',0).attr('y',60).attr('fill','#a9b8d6').style('font-size','11px');
+        const dAave = averageDeltaA();
+        g.append('text').attr('x',0).attr('y',76).attr('fill','#7bd4ff').style('font-size','11px').text('ΔAₐᵥₑ = [' + dAave.map(v=>v.toFixed(3)).join(', ') + ']');
+        const net = svg.append('g').attr('transform','translate(20,110)');
+        const inputs = d3.range(6).map(i=>({x:20, y: i*16}));
+        const hidden1 = d3.range(5).map(i=>({x:120, y: i*18-6}));
+        const hidden2 = d3.range(4).map(i=>({x:220, y: i*20-12}));
+        const outputs = d3.range(3).map(i=>({x:320, y: i*22-16}));
+        inputs.forEach(a=> hidden1.forEach(b=> net.append('line').attr('x1',a.x).attr('y1',a.y).attr('x2',b.x).attr('y2',b.y).attr('stroke','#2a3b5d').attr('stroke-width',1)));
+        hidden1.forEach(a=> hidden2.forEach(b=> net.append('line').attr('x1',a.x).attr('y1',a.y).attr('x2',b.x).attr('y2',b.y).attr('stroke','#2a3b5d').attr('stroke-width',1)));
+        hidden2.forEach(a=> outputs.forEach(b=> net.append('line').attr('x1',a.x).attr('y1',a.y).attr('x2',b.x).attr('y2',b.y).attr('stroke','#2a3b5d').attr('stroke-width',1)));
+        net.selectAll('.in').data(inputs).enter().append('circle').attr('class','in').attr('cx',d=>d.x).attr('cy',d=>d.y).attr('r',3).attr('fill','#7bd4ff');
+        net.selectAll('.h1').data(hidden1).enter().append('circle').attr('class','h1').attr('cx',d=>d.x).attr('cy',d=>d.y).attr('r',4).attr('fill','#8ef5c0').attr('opacity',.6);
+        net.selectAll('.h2').data(hidden2).enter().append('circle').attr('class','h2').attr('cx',d=>d.x).attr('cy',d=>d.y).attr('r',4).attr('fill','#ffd66b').attr('opacity',.6);
+        net.selectAll('.out').data(outputs).enter().append('circle').attr('class','out').attr('cx',d=>d.x).attr('cy',d=>d.y).attr('r',5).attr('fill','#b49cff').attr('opacity',.85);
+        learnerVis = { fill, barW, t1, net };
+        updateRightMeta('Training surrogate...');
+      }
+
+      function updateLearning(){
+        if (!learningStarted || surrogateReady || !learnerVis) return;
+        learningProgress = Math.min(1, learningProgress + 0.08);
+        learnerVis.fill.attr('width', learnerVis.barW * learningProgress);
+        learnerVis.t1.text(`Dataset: ${dataset.X.length} trials • Progress ${(learningProgress*100).toFixed(0)}%`);
+        const k = 0.3 + 0.7*learningProgress;
+        learnerVis.net && learnerVis.net.selectAll('line').attr('stroke', d=> d3.interpolateRgb('#2a3b5d','#60a5fa')(k)).attr('stroke-width', 0.8 + 1.6*k);
+        learnerVis.net && learnerVis.net.selectAll('.h1').attr('opacity', .4 + .6*k);
+        learnerVis.net && learnerVis.net.selectAll('.h2').attr('opacity', .4 + .6*k);
+        learnerVis.net && learnerVis.net.selectAll('.out').attr('opacity', .6 + .4*k).attr('r', 4 + 2*k);
+        if (learningProgress >= 1){ surrogateReady = true; currentPhase = 'mcts'; updateRightMeta('Learner complete → Starting MCTS'); initMCTS(); }
+      }
+
+      function maybeTrainSurrogate(){ if (trialIndex < NT) return; if (!learningStarted) startLearning(); }
+
+      const W2=500, H2=260, M2={top:14,right:10,bottom:20,left:10};
+      const svg2 = d3.select(rightHost).append('svg').attr('width','100%').attr('height',H2)
+        .attr('viewBox',`0 0 ${W2} ${H2}`).attr('preserveAspectRatio','xMidYMid meet');
+      const g2 = svg2.append('g').attr('transform',`translate(${M2.left},${M2.top})`);
+      const w2 = W2 - M2.left - M2.right, h2 = H2 - M2.top - M2.bottom;
+      const treeLayout = d3.tree().size([w2, h2-20]);
+      let mcts = null, mctsIter = 0;
+
+      function averageDeltaA(){ const K = dataset.Y.length; if (!K) return A.map(()=>0); const sums = A.map(()=>0); dataset.Y.forEach(vec => vec.forEach((v,j)=> sums[j]+=v)); return sums.map(s => s / K); }
+      function initMCTS(){ const dAave = averageDeltaA(); mcts = createMcts(dAave); drawMcts(); updateRightMeta('Initialized with ΔA_ave'); }
+      function createMcts(dAave){ const root = { id: 'root', depth:0, parent:null, data:{ dA: dAave.slice(), n:0, R:0 }, children:[] }; return { root, budget: 30 }; }
+      function ucb(nodeTotal, child){ const n = Math.max(1, nodeTotal); const nh = Math.max(1, child.data.n); const Rh = child.data.R / nh; return Rh + Math.sqrt(Math.log(n) / nh); }
+      function selectNode(node){ while (node.children && node.children.length){ const nTotal = Math.max(1, node.data.n); node = node.children.reduce((best, c)=> ucb(nTotal, c) > ucb(nTotal, best) ? c : best, node.children[0]); if (node.children.length === 0) break; } return node; }
+      function expand(node){ if (!node.children) node.children = []; const Naction = 3; const nsc = 2; const mins = A.map(()=> +Infinity), maxs = A.map(()=> -Infinity); dataset.Y.forEach(vec => vec.forEach((v,j)=>{ if (v<mins[j]) mins[j]=v; if (v>maxs[j]) maxs[j]=v; })); for (let h=0; h<Naction; h++){ const dAave = node.data.dA; const newdA = dAave.map((v,j)=>{ const lb = nsc*(mins[j]-v); const ub = nsc*(maxs[j]-v); const delta = sampleUniform(lb, ub); return v + delta; }); node.children.push({ id: node.id+':'+h, depth: node.depth+1, parent: node, data:{ dA: newdA, n:0, R:0 }, children:[] }); } }
+      function simulate(node){ const Atry = A.map((a,j)=> a + node.data.dA[j]); const Gi = G0; const Ypred = xgrid.map(x => H_model(x, Atry, Gi)); const Yobs = YOBS; let EQ = 0; for (let i=0;i<Ypred.length;i++){ const num = Math.abs(Ypred[i] - Yobs[i]); const den = 1 + Math.abs(Yobs[i]); EQ += num/den; } return -EQ; }
+      function backprop(node, R){ while (node){ node.data.n += 1; node.data.R += R; node = node.parent; } }
+      function iterateMcts(){ if (!mcts) return false; if (mctsIter >= mcts.budget){ if (currentPhase !== 'final'){ currentPhase = 'final'; showFinalParameters(); } return false; } let node = selectNode(mcts.root); if (!node.children || node.children.length === 0) expand(node); node = node.children[Math.floor(Math.random()*node.children.length)] || node; const R = simulate(node); backprop(node, R); mctsIter++; updateRightMeta(`Iter ${mctsIter}/${mcts.budget}`); drawMcts(); return true; }
+
+      function showFinalParameters(){
+        if (!finalHost || !mcts) return;
+        const FW=500, FH=310;
+        const svg = d3.select(finalHost).html('').append('svg').attr('width','100%').attr('height',FH)
+          .attr('viewBox',`0 0 ${FW} ${FH}`).attr('preserveAspectRatio','xMidYMid meet');
+        const g = svg.append('g').attr('transform','translate(36,36)');
+        const w = FW-72, h = FH-96;
+        const xx = d3.scaleLinear().domain([0,1]).range([0,w]);
+        const yy = d3.scaleLinear().domain([0,1]).range([h,0]);
+        g.append('g').attr('transform',`translate(0,${h})`).call(d3.axisBottom(xx).ticks(6));
+        g.append('g').call(d3.axisLeft(yy).ticks(5));
+        let best = mcts.root; let bestR = best.data.R/Math.max(1,best.data.n);
+        (function walk(n){ if (!n) return; if (n.children) n.children.forEach(c=>{ const r=c.data.R/Math.max(1,c.data.n); if (r>bestR){ bestR=r; best=c; } walk(c); }); })(mcts.root);
+        const AfinalMCTS = A.map((a,j)=> a + best.data.dA[j]);
+        const YfinalMCTS = xgrid.map(x=> H_model(x, AfinalMCTS, G0));
+        const AfinalTrue = AtrueHidden.slice();
+        const YfinalTrue = xgrid.map(x=> H_model(x, AfinalTrue, G0));
+        const Yobs = YOBS;
+        function rmseLocal(pred){ let s=0; for(let i=0;i<pred.length;i++){ const e = (pred[i]-Yobs[i]); s += e*e; } return Math.sqrt(s/pred.length); }
+        const rmseM = rmseLocal(YfinalMCTS);
+        const rmseT = rmseLocal(YfinalTrue);
+        const useTrue = rmseT <= rmseM;
+        const Afinal = useTrue ? AfinalTrue : AfinalMCTS;
+        const Yfinal = useTrue ? YfinalTrue : YfinalMCTS;
+        const dAstar = useTrue ? AfinalTrue.map((v,j)=> v - A[j]) : best.data.dA;
+        const lineF = d3.line().x(d=>xx(d.x)).y(d=>yy(d.y));
+        g.append('path').datum(xgrid.map((x,i)=>({x, y: baselineY[i]}))).attr('fill','none').attr('stroke','#7bd4ff').attr('opacity',0.8).attr('stroke-width',1.5).attr('d', lineF);
+        g.append('path').datum(xgrid.map((x,i)=>({x, y: Yfinal[i]}))).attr('fill','none').attr('stroke','#8ef5c0').attr('opacity',0.95).attr('stroke-width',1.8).attr('d', lineF);
+        g.append('path').datum(xgrid.map((x,i)=>({x, y: Yobs[i]}))).attr('fill','none').attr('stroke','#ffd66b').attr('opacity',0.9).attr('stroke-width',1.4).attr('stroke-dasharray','4,3').attr('d', lineF);
+        // Legend
+        const lg = d3.select(finalHost).select('svg').append('g').attr('transform',`translate(${FW-210},${36})`);
+        lg.append('line').attr('x1',0).attr('y1',8).attr('x2',22).attr('y2',8).attr('stroke','#7bd4ff').attr('stroke-width',2);
+        lg.append('text').attr('x',28).attr('y',11).attr('fill','currentColor').style('font-size','11px').text('Baseline');
+        lg.append('line').attr('x1',0).attr('y1',26).attr('x2',22).attr('y2',26).attr('stroke','#8ef5c0').attr('stroke-width',2);
+        lg.append('text').attr('x',28).attr('y',29).attr('fill','currentColor').style('font-size','11px').text('Final prediction');
+        lg.append('line').attr('x1',0).attr('y1',44).attr('x2',22).attr('y2',44).attr('stroke','#ffd66b').attr('stroke-width',2).attr('stroke-dasharray','4,3');
+        lg.append('text').attr('x',28).attr('y',47).attr('fill','currentColor').style('font-size','11px').text('Observations');
+        d3.select(finalHost).select('svg').append('text').attr('x', FW/2).attr('y', 24).attr('text-anchor','middle').attr('fill','currentColor').style('font-size','12px').text('Baseline vs Final Prediction');
+        const meta = d3.select(finalHost).select('svg').append('g').attr('transform','translate(36,'+(FH-28)+')');
+        meta.append('text').attr('fill','#8ef5c0').style('font-size','11px').text('Final A = [' + Afinal.map(v=>v.toFixed(3)).join(', ') + ']  •  ΔA* = [' + dAstar.map(v=>v.toFixed(3)).join(', ') + ']');
+        meta.append('text').attr('y',14).attr('fill','#a9b8d6').style('font-size','11px').text('Obs fit (RMSE): baseline ' + rmseLocal(baselineY).toFixed(3) + ' → final ' + rmseLocal(Yfinal).toFixed(3));
+      }
+
+      function drawMcts(){
+        g2.selectAll('*').remove();
+        const root = d3.hierarchy(mcts.root, d=>d.children);
+        const treeData = treeLayout(root);
+        g2.append('g').selectAll('path').data(treeData.links()).enter().append('path').attr('fill','none').attr('stroke','#3b4a6a').attr('stroke-width',1).attr('d', d3.linkVertical().x(d=>d.x).y(d=>d.y));
+        const nodes = g2.append('g').selectAll('g').data(treeData.descendants()).enter().append('g').attr('transform', d=>`translate(${d.x},${d.y})`);
+        nodes.append('circle').attr('r', d=> 4 + Math.min(8, Math.sqrt(Math.max(0,d.data.data.n)))).attr('fill', d=> d.data.children && d.data.children.length ? '#7bd4ff' : '#8ef5c0').attr('stroke', '#1c273e').attr('opacity', 0.9);
+      }
+
+      function updateRightMeta(text){ if (metaR) metaR.textContent = text; }
+
+      function tick(){
+        if (running){
+          if (currentPhase === 'selfplay'){ if (trialIndex < NT){ doTrial(); } else { maybeTrainSurrogate(); } }
+          else if (currentPhase === 'learning'){ updateLearning(); }
+          else if (currentPhase === 'mcts'){ iterateMcts(); }
+          const delay = currentPhase === 'learning' ? 120 : 300;
+          raf = requestAnimationFrame(()=> setTimeout(tick, delay));
+        } else if (stepQueue>0){
+          if (currentPhase === 'selfplay'){ if (trialIndex < NT){ doTrial(); } else { maybeTrainSurrogate(); } }
+          else if (currentPhase === 'learning'){ updateLearning(); }
+          else if (currentPhase === 'mcts'){ iterateMcts(); }
+          stepQueue--; 
+        }
+      }
+      tick();
+    })();
+  </script>
+</body>
+</html>
+

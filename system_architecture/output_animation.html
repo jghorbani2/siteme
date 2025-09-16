@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Spider — Output Explainer (ρ example)</title>
+  <meta name="color-scheme" content="dark light" />
+  <style>
+    :root{
+      --bg:#0b0f1a;
+      --card:#101828;
+      --ink:#e5edff;
+      --muted:#a9b8d6;
+      --accent:#7eb6ff;
+      --accent2:#86f3c2;
+      --frame:#2a3b5d;
+    }
+    *{ box-sizing: border-box; }
+    body{ margin:0; font:15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background:var(--bg); color:var(--ink); }
+    .wrap{ max-width:1100px; margin:0 auto; padding:28px 16px 42px; }
+    h2{ margin:0 0 8px; font-weight:800; letter-spacing:.2px; }
+    .lede{ margin:0 0 16px; color:var(--muted); text-wrap:balance; }
+
+    .stage{ display:grid; grid-template-columns: 1.2fr .8fr; gap:16px; align-items:stretch; }
+    @media (max-width: 960px){ .stage{ grid-template-columns: 1fr; } }
+
+    .scene{
+      --R: 190px; /* Orbit radius (increased to avoid overlap) */
+      position:relative; min-height:480px; border-radius:16px;
+      border:1px solid var(--frame);
+      background: radial-gradient(1000px 600px at 50% 12%, #0e1628 0%, #0c1322 60%, #0b0f1a 100%);
+      overflow:hidden;
+      box-shadow:0 20px 60px rgba(0,0,0,.45);
+    }
+    @media (max-width: 520px){
+      .scene{ --R: 155px; min-height:420px; }
+    }
+
+    /* Central result bubble */
+    .core{
+      position:absolute; inset:auto 0 0 0; margin:auto; top:50%;
+      width:220px; height:220px; transform:translateY(-50%);
+      border-radius:50%;
+      background:radial-gradient(60% 60% at 50% 40%, rgba(126,182,255,.25), rgba(134,243,194,.15)), rgba(18,26,44,.66);
+      border:1px solid var(--frame);
+      display:grid; place-content:center;
+      text-align:center;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.04) inset, 0 30px 60px rgba(0,0,0,.45);
+      z-index:2;
+    }
+    .core .value{ font-weight:900; font-size:34px; letter-spacing:.2px; }
+    .core .label{ margin-top:6px; font-size:12px; color:var(--muted); }
+
+    /* Visible orbit track (static circle) */
+    .track{
+      position:absolute; top:50%; left:50%;
+      width: calc(var(--R) * 2); height: calc(var(--R) * 2);
+      transform: translate(-50%, -50%);
+      border-radius:50%;
+      border:1px dashed rgba(126,182,255,.35);
+      box-shadow: 0 0 24px rgba(126,182,255,.12), inset 0 0 24px rgba(134,243,194,.06);
+      filter: drop-shadow(0 0 8px rgba(126,182,255,.18));
+      opacity:.85;
+      z-index:1;
+      pointer-events:none;
+    }
+
+    /* Orbiting callouts */
+    .orbit{
+      position:absolute; inset:0; pointer-events:none; z-index:3;
+    }
+    .callout{
+      position:absolute; top:50%; left:50%;
+      transform: translate(-50%,-50%) rotate(var(--deg,0deg)) translateY(calc(-1 * var(--r, var(--R))));
+      transform-origin: 0 0;
+      pointer-events:auto;
+      transition: filter .2s ease, opacity .2s ease;
+    }
+    .bubble{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:8px 12px; border-radius:999px;
+      border:1px solid transparent;
+      background:
+        linear-gradient(rgba(18,28,48,.88), rgba(18,28,48,.84)) padding-box,
+        linear-gradient(135deg, var(--accent), var(--accent2)) border-box;
+      color:var(--ink); font-weight:700; font-size:13px;
+      box-shadow:0 8px 24px rgba(0,0,0,.45);
+      white-space:nowrap;
+      opacity:.85;
+    }
+    .callout.active .bubble{ opacity:1; filter:drop-shadow(0 0 12px rgba(126,182,255,.25)); }
+
+    /* Smooth spin */
+    @media (prefers-reduced-motion: no-preference){
+      .orbit{ animation: spin 24s linear infinite; }
+      .callout{ transition: transform .6s ease; }
+    }
+    @keyframes spin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+
+    /* Side panel */
+    .panel{
+      border:1px solid var(--frame); border-radius:16px; padding:14px;
+      background:linear-gradient(180deg, rgba(16,24,40,.82), rgba(16,24,40,.74));
+      box-shadow:0 20px 60px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.04);
+      display:flex; flex-direction:column; gap:10px;
+      min-height:480px;
+    }
+    .panel h3{ margin:0; font:800 16px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    .panel .meta{ font-size:12px; color:var(--muted); }
+    .panel .body{ border:1px solid rgba(42,59,93,.8); border-radius:12px; padding:10px; background:rgba(11,17,30,.6); min-height:260px; overflow:auto; }
+    .panel pre, .panel code{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size:12.5px; line-height:1.45; color:#dfe8ff; }
+    .panel ul{ margin:8px 0 0 18px; padding:0; }
+    .panel li{ margin:2px 0; }
+    .foot{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .chip{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; border:1px solid #2a3b5d; background:rgba(17,26,44,.5); font-weight:700; font-size:12px; }
+
+    /* Step dots */
+    .dots{ display:flex; gap:6px; align-items:center; }
+    .dot{ width:7px; height:7px; border-radius:999px; background:#24304c; }
+    .dot.active{ background:linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow:0 0 0 2px rgba(126,182,255,.25); }
+
+    /* Button (not used, retained for future) */
+    .btn{ appearance:none; background:rgba(16,22,36,.7); color:var(--ink); border:1px solid var(--frame); border-radius:10px; padding:8px 10px; font-weight:700; cursor:pointer; }
+    .btn:focus{ outline:2px solid var(--accent); outline-offset:2px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h2>Output</h2>
+    <p class="lede">Spotlight the computed result with traceable rationale. The right panel expands each callout in plain English, with symbols and methods.</p>
+
+    <div class="stage" id="stage">
+      <div class="scene" aria-label="Output animation">
+        <div class="core" aria-live="polite">
+          <div class="value" id="value">ρ = 1.97 t/m³</div>
+          <div class="label">Computed bulk density</div>
+        </div>
+
+        <!-- Visible orbit track (static) -->
+        <div class="track"></div>
+
+        <!-- Rotating callouts around the track -->
+        <div class="orbit">
+          <div class="callout" style="--deg:0deg"><span class="bubble">Inputs (p)</span></div>
+          <div class="callout" style="--deg:90deg; --r: calc(var(--R) + 72px)">
+            <span class="bubble">Practitioner’s input</span>
+          </div>          <div class="callout" style="--deg:180deg"><span class="bubble">Calculation path</span></div>
+          <div class="callout" style="--deg:270deg"><span class="bubble">Result</span></div>
+        </div>
+      </div>
+
+      <aside class="panel" aria-live="polite">
+        <div>
+          <h3 id="sideTitle">Inputs (p)</h3>
+          <div class="meta" id="sideMeta">Parameters used by the solver</div>
+        </div>
+        <div class="body" id="sideBody">
+<pre><code>SUCTION = 250 kPa
+ALPHA_P_C = 1.0
+VAN_GENUCHTEN_SHAPE_PARAM_N = 0.28
+VAN_GENUCHTEN_SHAPE_PARAM_M = 0.98
+VAN_GENUCHTEN_SHAPE_PARAM_N_W = 0.28
+SHAPE_PARAM_N_W = 0.28
+VAN_GENUCHTEN_SHAPE_PARAM_M_W = 0.98
+SW_MIN = 0.0
+SW_MAX = 1.0
+AIR_ENTRY_REF_VOID_RATIO = 0.012
+OMEGA_PRIME = 10.6
+S = 0.4</code></pre>
+        </div>
+        <div class="foot">
+          <span class="chip" id="chip">Σ: symbols consistent</span>
+          <div class="dots" aria-label="Step indicators">
+            <span class="dot active"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const steps = [
+      {
+        title: "Inputs (p)",
+        meta:  "Parameters used by the solver",
+        html: `<pre><code>SUCTION = 250 kPa
+ALPHA_P_C = 1.0
+VAN_GENUCHTEN_SHAPE_PARAM_N = 0.28
+VAN_GENUCHTEN_SHAPE_PARAM_M = 0.98
+VAN_GENUCHTEN_SHAPE_PARAM_N_W = 0.28
+SHAPE_PARAM_N_W = 0.28
+VAN_GENUCHTEN_SHAPE_PARAM_M_W = 0.98
+SW_MIN = 0.0
+SW_MAX = 1.0
+AIR_ENTRY_REF_VOID_RATIO = 0.012
+OMEGA_PRIME = 10.6
+S = 0.4</code></pre>`,
+        chip: "Σ: symbols consistent"
+      },
+      {
+        title: "Practitioner’s input",
+        meta:  "Domain hint incorporated via NLP → symbol",
+        html: `<pre><code>Practitioner’s input → “Sand with Silt”
+soil_type = SM</code></pre>`,
+        chip: "Parser/NLP → SM"
+      },
+      {
+        title: "Calculation path",
+        meta:  "Traceable sequence of providers with costs",
+        html: `<ul>
+  <li>e = 0.453  <em>(via SWRC_Invert_for_e, cost = 1.00)</em></li>
+  <li>soil_type = SM  <em>(via SoilTypeLocalNLP, cost = 3.00)</em></li>
+  <li>Gs = 2.685  <em>(via SoilTypeSpecificGravityForward, cost = 2.00)</em></li>
+  <li>ρ = 1.972  <em>(via VoidRatioFromDensitySaturationGs.rho, cost = 0.00)</em></li>
+</ul>`,
+        chip: "Providers: 4 → OK"
+      },
+      {
+        title: "Result",
+        meta:  "Bulk density with unit + rounding",
+        html: `<pre><code>Result → ρ = 1.97 t/m³</code></pre>`,
+        chip: "Rounded to 2 d.p."
+      }
+    ];
+
+    const callouts = [...document.querySelectorAll('.callout')];
+    const dots = [...document.querySelectorAll('.dot')];
+    const sideTitle = document.getElementById('sideTitle');
+    const sideMeta = document.getElementById('sideMeta');
+    const sideBody = document.getElementById('sideBody');
+    const chip = document.getElementById('chip');
+
+    let idx = 0;
+    function show(i){
+      idx = i % steps.length;
+      callouts.forEach((c, j) => c.classList.toggle('active', j === idx));
+      dots.forEach((d, j) => d.classList.toggle('active', j === idx));
+      const s = steps[idx];
+      sideTitle.textContent = s.title;
+      sideMeta.textContent = s.meta;
+      sideBody.innerHTML = s.html;
+      chip.textContent = s.chip;
+    }
+
+    // Advance every 4 seconds; pause on hover/focus
+    let timer = setInterval(() => show(idx+1), 4000);
+    const stage = document.getElementById('stage');
+    stage.addEventListener('mouseenter', () => clearInterval(timer));
+    stage.addEventListener('mouseleave', () => timer = setInterval(() => show(idx+1), 4000));
+    stage.addEventListener('focusin', () => clearInterval(timer));
+    stage.addEventListener('focusout', () => timer = setInterval(() => show(idx+1), 4000));
+
+    // Click to jump
+    callouts.forEach((c, k) => c.addEventListener('click', () => show(k)));
+
+    // Init
+    show(0);
+  </script>
+</body>
+</html>

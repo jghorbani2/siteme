@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Spider — Inputs Deep Dive (3D models + External API)</title>
+<meta name="theme-color" content="#0b0f1a"/>
+<style>
+  :root{
+    --bg0:#0b0f1a; --bg1:#101a2f; --panel:#0f182c; --stroke:#263858;
+    --ink:#e8efff; --muted:#a9b8d6;
+    --hub:#87cefa; --lab:#88e0ff; --insitu:#a9ff8a; --realtime:#ffd36c; --sat:#b49cff; --pract:#8ef5c0; --docs:#c0d5ff; --api:#7fe0ff;
+    --success:#4ade80; --warning:#fbbf24; --error:#ef4444; --info:#60a5fa;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:radial-gradient(1200px 800px at 50% 15%, var(--bg1) 0%, var(--bg0) 55%, #090e18 100%); color:var(--ink); font:14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial; overflow:hidden}
+  .layout{display:grid; grid-template-columns: 1fr 360px; grid-template-rows: 1fr; gap:12px; height:100%}
+  .stage{position:relative; height:100%; min-height:0}
+  canvas{display:block; width:100%; height:100%}
+
+  .panel{
+    background:rgba(15,22,36,.94); border:1px solid var(--stroke); border-radius:14px;
+    box-shadow:0 10px 40px rgba(0,0,0,.5); margin:12px 12px 12px 0; padding:14px; overflow:auto;
+  }
+  .panel h1{margin:0 0 6px; font:700 18px/1.2 ui-sans-serif}
+  .panel p{margin:0 0 8px; color:#cfe0ff}
+  .panel .micro{font-size:12px; color:var(--muted)}
+  .pill{display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; border:1px solid var(--stroke); background:rgba(22,33,56,.7); margin:8px 0 12px}
+  .dot{width:10px; height:10px; border-radius:50%}
+  .legend{display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 12px}
+  .legend span{display:inline-flex; align-items:center; gap:8px; font-size:12px; color:#cfe0ff; background:rgba(20,30,50,.6); border:1px solid var(--stroke); border-radius:9px; padding:6px 8px}
+  .controls{display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 10px}
+  .btn{background:rgba(13,20,36,.9); color:#cfe3ff; border:1px solid #24304c; border-radius:8px; padding:6px 10px; cursor:pointer; font:600 12px/1.2 ui-sans-serif}
+  .btn:focus{outline:2px solid #6aaeff; outline-offset:2px}
+  .sep{height:1px; background:#22314f; margin:10px 0}
+  .kvs{display:grid; grid-template-columns: auto 1fr; gap:6px 10px; font-size:13px}
+  .kvs span{color:#cfe0ff}
+  .kvs small{color:#9fb3d9}
+  .metric{display:flex; align-items:center; gap:8px; margin:6px 0}
+  .metric-bar{background:rgba(38,56,88,.3); height:4px; border-radius:2px; flex:1; overflow:hidden}
+  .metric-fill{background:linear-gradient(90deg, var(--success), var(--warning), var(--error)); height:100%; border-radius:2px; transition:width 0.5s ease}
+  .metric-value{font-size:11px; color:#9fb3d9; min-width:35px; text-align:right}
+  .status-indicator{display:inline-flex; align-items:center; gap:4px; padding:2px 6px; border-radius:10px; font-size:11px; font-weight:600}
+  .status-active{background:rgba(16,185,129,.2); color:#10b981; border:1px solid rgba(16,185,129,.3)}
+  .status-inactive{background:rgba(107,114,128,.2); color:#6b7280; border:1px solid rgba(107,114,128,.3)}
+  .status-error{background:rgba(239,68,68,.2); color:#ef4444; border:1px solid rgba(239,68,68,.3)}
+
+  .topbar{
+    position:absolute; z-index:5; left:12px; top:12px; right:372px;
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:rgba(12,18,32,.55); border:1px solid var(--stroke); border-radius:12px; padding:10px 12px; backdrop-filter:saturate(1.1) blur(6px)
+  }
+  .topbar h2{margin:0; font:700 15px/1.2 ui-sans-serif}
+  .topbar p{margin:0; color:#c6d5f3; font-size:13px}
+
+  #hud{position:absolute; left:12px; bottom:12px; z-index:6; font:600 12px ui-sans-serif; color:#cfe3ff; background:rgba(12,18,32,.9); border:1px solid #24304c; border-radius:10px; padding:10px 14px; backdrop-filter:blur(6px); box-shadow: 0 4px 15px rgba(0,0,0,0.3);}
+  #hud b{color:#60a5fa}
+  #hud .status-item{display:flex; align-items:center; gap:6px; margin:4px 0;}
+  #hud .status-dot{width:8px; height:8px; border-radius:50%; animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+  #loadingOverlay{position:fixed; top:0; left:0; right:0; bottom:0; background:radial-gradient(1200px 800px at 50% 15%, var(--bg1) 0%, var(--bg0) 55%, #090e18 100%); z-index:10; display:flex; align-items:center; justify-content:center; flex-direction:column; color:var(--ink)}
+  #loadingOverlay.hidden{display:none}
+  #loadingBar{background:rgba(38,56,88,.3); border-radius:4px; height:6px; width:200px; margin:16px 0; overflow:hidden}
+  #loadingProgress{background:linear-gradient(90deg, var(--success), var(--info)); height:100%; width:0%; border-radius:4px; transition:width 0.3s ease}
+  #loadingText{margin:8px 0 0; font-size:14px; opacity:0.8}
+
+  @media (max-width: 1024px){
+    .layout{grid-template-columns: 1fr}
+    .panel{position:absolute; right:12px; top:64px; width:min(92vw,420px); max-height:70vh}
+    .topbar{right:12px}
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="stage" id="stage">
+    <div class="topbar" role="region" aria-label="Inputs deep dive">
+      <div>
+        <h2>Inputs deep dive</h2>
+        <p>Drag to orbit. Scroll to zoom. Click a source to learn how Spider ingests and normalises it.</p>
+      </div>
+      <div class="controls">
+        <!-- Autorotate control intentionally removed -->
+        <button class="btn" id="btnReset">Reset view</button>
+      </div>
+    </div>
+    <div id="hud">
+      <div class="status-item">
+        <span class="status-dot" style="background:#10b981"></span>
+        <span>status: <b id="hudStatus">processing</b></span>
+      </div>
+      <div class="status-item">
+        <span class="status-dot" style="background:#60a5fa"></span>
+        <span>data streams: <b id="hudStreams">7 active</b></span>
+      </div>
+      <div class="status-item">
+        <span class="status-dot" style="background:#f59e0b"></span>
+        <span>throughput: <b id="hudThroughput">2.4 MB/s</b></span>
+      </div>
+      <div class="status-item">
+        <span>size: <b><span id="hudSize">–</span></b></span>
+      </div>
+    </div>
+    <canvas id="scene"></canvas>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay">
+    <div style="text-align:center; font:700 18px/1.2 ui-sans-serif; margin-bottom:8px">Initializing Spider Inputs</div>
+    <div id="loadingBar">
+      <div id="loadingProgress"></div>
+    </div>
+    <div id="loadingText">Loading 3D models...</div>
+  </div>
+
+  <aside class="panel" id="infoPanel" role="complementary" aria-live="polite">
+    <div class="pill"><span class="dot" style="background:var(--hub)"></span><strong>Inputs hub</strong></div>
+    <h1 id="pTitle">Everything in, one format out</h1>
+    <p id="pBody">
+      Spider ingests lab results, in-situ tests, real-time sensors, satellite data, practitioner notes, documents, and **external APIs**.
+      It parses, validates, and maps them into a single canonical schema ready for reasoning.
+    </p>
+
+    <div class="legend">
+      <span><i class="dot" style="background:var(--lab)"></i>Lab</span>
+      <span><i class="dot" style="background:var(--insitu)"></i>In-situ</span>
+      <span><i class="dot" style="background:var(--realtime)"></i>Real-time / IoT</span>
+      <span><i class="dot" style="background:var(--sat)"></i>Satellite / remote</span>
+      <span><i class="dot" style="background:var(--pract)"></i>Practitioner</span>
+      <span><i class="dot" style="background:var(--docs)"></i>Docs / drawings</span>
+      <span><i class="dot" style="background:var(--api)"></i>External API</span>
+    </div>
+
+    <div class="sep"></div>
+    <div class="kvs" id="pKvs">
+      <small>Examples</small><span>Standard Proctor, triaxial, oedometer</span>
+      <small>Validation</small><span>Unit checks, ranges, cross-field rules</span>
+      <small>Mapping</small><span>Canonical parameters (e, Gs, ρ, φ, …)</span>
+    </div>
+
+    <p class="micro" id="pMicro">Tip: Click different nodes to highlight flows into the hub.</p>
+  </aside>
+</div>
+
+<!-- Three.js UMD (single dependency) -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+(function(){
+  const hud = document.getElementById('hud');
+  const hudSize = document.getElementById('hudSize');
+  const canvas = document.getElementById('scene');
+  const stage = document.getElementById('stage');
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  const loadingProgress = document.getElementById('loadingProgress');
+  const loadingText = document.getElementById('loadingText');
+
+  // Loading system
+  let loadingSteps = [
+    { text: 'Loading Three.js...', progress: 10 },
+    { text: 'Initializing renderer...', progress: 20 },
+    { text: 'Setting up scene...', progress: 30 },
+    { text: 'Building 3D models...', progress: 50 },
+    { text: 'Setting up lighting...', progress: 70 },
+    { text: 'Initializing interactions...', progress: 85 },
+    { text: 'Connecting to external APIs...', progress: 95 },
+    { text: 'Ready!', progress: 100 }
+  ];
+  let currentLoadingStep = 0;
+
+  function updateLoading(step) {
+    if (step < loadingSteps.length) {
+      loadingText.textContent = loadingSteps[step].text;
+      loadingProgress.style.width = loadingSteps[step].progress + '%';
+      currentLoadingStep = step;
+    }
+  }
+
+  function hideLoading() {
+    loadingOverlay.classList.add('hidden');
+    setTimeout(() => {
+      loadingOverlay.style.display = 'none';
+    }, 500);
+  }
+
+  if (!window.THREE){
+    hud.innerHTML = 'status: <b>error</b> • could not load three.min.js';
+    loadingText.textContent = 'Error: Three.js failed to load';
+    loadingProgress.style.background = 'var(--error)';
+    console.error('THREE failed to load');
+    return;
+  }
+
+  updateLoading(0);
+
+  // WEBGL availability check
+  try{
+    const gl = document.createElement('canvas').getContext('webgl2') || document.createElement('canvas').getContext('webgl');
+    if (!gl){ throw new Error('WebGL not available'); }
+  }catch(err){
+    hud.innerHTML = 'status: <b>error</b> • WebGL not available in this browser/context';
+    loadingText.textContent = 'Error: WebGL not supported';
+    loadingProgress.style.background = 'var(--error)';
+    console.error(err);
+    return;
+  }
+
+  updateLoading(1);
+
+  // Scene & camera
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x0b0f1a, 0.0007);
+
+  const camera = new THREE.PerspectiveCamera(55, 130, 0.1, 2000);
+  let radius = 580, yaw =- 2.6, pitch = 0.35;
+  function updateCam(){
+    const y = radius * Math.sin(pitch);
+    const rcp = radius * Math.cos(pitch);
+    const x = rcp * Math.sin(yaw);
+    const z = rcp * Math.cos(yaw);
+    camera.position.set(x, y, z);
+    camera.lookAt(0,0,0);
+  }
+  updateCam();
+
+  // Enhanced Renderer with Post-Processing
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    alpha: true,
+    powerPreference: "high-performance"
+  });
+  renderer.setPixelRatio(Math.min(2.5, window.devicePixelRatio || 1));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  updateLoading(3);
+
+  // Post-processing setup (requires additional libraries, but we'll simulate effects)
+  let postProcessingEnabled = true;
+  const renderTarget = new THREE.WebGLRenderTarget(
+    window.innerWidth * renderer.getPixelRatio(),
+    window.innerHeight * renderer.getPixelRatio(),
+    {
+      format: THREE.RGBAFormat,
+      type: THREE.FloatType,
+      encoding: THREE.sRGBEncoding
+    }
+  );
+
+  // Custom bloom effect simulation
+  const bloomStrength = 0.8;
+  const bloomRadius = 0.4;
+
+  // Sizing
+  function sizeFrom(el){ const r = el.getBoundingClientRect(); return {w: Math.max(1, Math.floor(r.width)), h: Math.max(1, Math.floor(r.height))}; }
+  function resize(){ const {w,h} = sizeFrom(canvas); hudSize.textContent = w + ' × ' + h; if (canvas.width !== w || canvas.height !== h){ renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); } }
+  const ro = new ResizeObserver(()=>{ resize(); }); ro.observe(stage);
+  requestAnimationFrame(()=>{ resize(); hud.innerHTML = 'status: <b>running</b> • size: <span id="hudSize">'+hudSize.textContent+'</span>'; });
+
+  // Enhanced Lighting System
+  // Ambient hemisphere light for base illumination
+  const hemi = new THREE.HemisphereLight(0xddeeff, 0x0b0f1a, 0.4);
+  scene.add(hemi);
+
+  // Primary key light with enhanced shadows
+  const key = new THREE.DirectionalLight(0xaad4ff, 1.2);
+  key.position.set(140, 220, 160);
+  key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.camera.near = 50;
+  key.shadow.camera.far = 800;
+  key.shadow.camera.right = 250;
+  key.shadow.camera.left = -250;
+  key.shadow.camera.top = 250;
+  key.shadow.camera.bottom = -250;
+  key.shadow.bias = -0.0001;
+  scene.add(key);
+
+  // Fill light from the opposite side
+  const fill = new THREE.DirectionalLight(0x4466aa, 0.6);
+  fill.position.set(-180, 80, -120);
+  scene.add(fill);
+
+  // Rim light for edge definition
+  const rim = new THREE.DirectionalLight(0x3355aa, 0.4);
+  rim.position.set(-220, 120, -140);
+  scene.add(rim);
+
+  // Accent point lights for key objects
+  const hubLight = new THREE.PointLight(0x87cefa, 0.8, 200);
+  hubLight.position.set(0, 20, 0);
+  scene.add(hubLight);
+
+  updateLoading(5);
+
+  // Subtle volumetric lighting effect
+  const volumetricLight = new THREE.SpotLight(0xaad4ff, 0.3, 400, Math.PI/4, 0.5);
+  volumetricLight.position.set(100, 150, 100);
+  volumetricLight.target.position.set(0, 0, 0);
+  scene.add(volumetricLight);
+  scene.add(volumetricLight.target);
+
+  // Subtle global shadow catcher (toggle off by removing these 4 lines)
+  const shadowGeo = new THREE.CircleGeometry(420, 64);
+  const shadowMat = new THREE.ShadowMaterial({opacity:0.14});
+  const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+  shadowMesh.rotation.x = -Math.PI/2; shadowMesh.position.y = -46; shadowMesh.receiveShadow = true; scene.add(shadowMesh);
+
+  // Label sprite helper — always on top
+  function labelSprite(text, color="#eaf3ff", size=13){
+    const c = document.createElement('canvas'); const ctx = c.getContext('2d');
+    ctx.font = `600 ${size}px ui-sans-serif, system-ui`;
+    const w = Math.ceil(ctx.measureText(text).width)+16, h = size+12;
+    c.width = w*2; c.height = h*2; ctx.scale(2,2);
+    ctx.fillStyle = "rgba(20,30,50,0.7)"; roundRect(ctx, 0,0, w, h, 8); ctx.fill();
+    ctx.strokeStyle = "rgba(40,60,100,0.9)"; ctx.stroke();
+    ctx.fillStyle = color; ctx.textBaseline="middle"; ctx.font = `600 ${size}px ui-sans-serif, system-ui`; ctx.fillText(text, 8, h/2);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.SpriteMaterial({map:tex, transparent:true}); mat.depthTest=false; mat.depthWrite=false;
+    const s = new THREE.Sprite(mat); s.center.set(0.5, 0); s.scale.set(w, h, 1); s.renderOrder=999; return s;
+  }
+  function roundRect(ctx, x, y, w, h, r){ ctx.beginPath(); ctx.moveTo(x+r, y); ctx.arcTo(x+w, y, x+w, y+h, r); ctx.arcTo(x+w, y+h, x, y+h, r); ctx.arcTo(x, y+h, x, y, r); ctx.arcTo(x, y, x+w, y, r); ctx.closePath(); }
+
+  // Enhanced Materials & model builders
+  const matStd = (color, metalness=0.1, roughness=0.35, emissive=0x000000, emissiveIntensity=0)=> new THREE.MeshStandardMaterial({
+    color,
+    metalness: Math.max(0, Math.min(1, metalness)),
+    roughness: Math.max(0, Math.min(1, roughness)),
+    emissive: new THREE.Color(emissive),
+    emissiveIntensity
+  });
+
+  const matGlass = (color, opacity=0.25)=> new THREE.MeshPhysicalMaterial({
+    color,
+    metalness: 0,
+    roughness: 0.1,
+    transparent: true,
+    opacity,
+    transmission: 0.9,
+    thickness: 0.5,
+    ior: 1.5,
+    clearcoat: 0.3,
+    clearcoatRoughness: 0.1
+  });
+
+  // Premium material for special effects
+  const matGlow = (color, intensity=0.3)=> new THREE.MeshStandardMaterial({
+    color,
+    emissive: new THREE.Color(color),
+    emissiveIntensity: intensity,
+    transparent: true,
+    opacity: 0.8
+  });
+
+  function buildSatellite(color){
+    const g = new THREE.Group();
+
+    // Main satellite bus with enhanced materials
+    const bus = new THREE.Mesh(
+      new THREE.BoxGeometry(26, 18, 18),
+      matStd(color, 0.7, 0.3, color, 0.1)
+    );
+    bus.castShadow = bus.receiveShadow = true;
+    g.add(bus);
+
+    // Solar panels with metallic sheen
+    const panelGeo = new THREE.BoxGeometry(40, 2.2, 18);
+    const panelL = new THREE.Mesh(panelGeo, matStd(color, 0.8, 0.2, color, 0.05));
+    panelL.position.x = -36;
+    panelL.castShadow = panelL.receiveShadow = true;
+    g.add(panelL);
+
+    const panelR = panelL.clone();
+    panelR.position.x = 36;
+    g.add(panelR);
+
+    // Enhanced dish antenna
+    const dish = new THREE.Mesh(
+      new THREE.SphereGeometry(8, 32, 20, 0, Math.PI*2, 0, Math.PI/2),
+      matStd(color, 0.6, 0.15, color, 0.08)
+    );
+    dish.scale.y = 0.6;
+    dish.position.set(0, -2, 14);
+    dish.castShadow = dish.receiveShadow = true;
+    g.add(dish);
+
+    // Communication antenna with glow effect
+    const ant = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.5, 0.5, 14, 12),
+      matGlow(0xffffff, 0.2)
+    );
+    ant.rotation.z = Math.PI/2;
+    ant.position.set(0, 8, 0);
+    ant.castShadow = true;
+    g.add(ant);
+
+    // Add subtle thruster details
+    const thruster1 = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.5, 2, 3, 8),
+      matStd(0x666666, 0.9, 0.1)
+    );
+    thruster1.position.set(13, 0, -9);
+    thruster1.castShadow = true;
+    g.add(thruster1);
+
+    const thruster2 = thruster1.clone();
+    thruster2.position.set(-13, 0, -9);
+    g.add(thruster2);
+
+    g.userData.anim = (t)=>{
+      panelL.rotation.y = 0.1 * Math.sin(t * 0.8);
+      panelR.rotation.y = -0.1 * Math.sin(t * 0.8);
+      // Add subtle wobble
+      g.rotation.z = 0.02 * Math.sin(t * 0.5);
+    };
+    return g;
+  }
+  function buildFlask(color){
+    const g = new THREE.Group();
+    const pts = []; const H = 30; for (let i=0;i<=16;i++){ const y=i/16*H; let r=6; if (y>6 && y<26) r=12+8*Math.sin((y-6)/20*Math.PI); if (y>=26) r=6; pts.push(new THREE.Vector2(r,y)); }
+    const body = new THREE.Mesh(new THREE.LatheGeometry(pts, 48), matGlass(color, 0.22)); body.castShadow = true; body.receiveShadow = true; body.position.y = -8; g.add(body);
+    const liq = new THREE.Mesh(new THREE.CylinderGeometry(13, 11, 14, 36), matStd(0x7bdcff, 0, 0.15)); liq.position.y = -8; liq.castShadow = liq.receiveShadow = true; g.add(liq);
+    const cork = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 4.2, 4, 16), matStd(0x9c7a4b, 0.2, 0.8)); cork.position.y = 18; cork.castShadow = true; g.add(cork);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(18, 18, 2, 48), matStd(0x1a263f, 0.2, 0.8)); base.position.y = -16; base.receiveShadow = true; g.add(base);
+    g.userData.anim = (t)=>{ g.rotation.y = 0.15*Math.sin(t*0.6); };
+    return g;
+  }
+  function buildCPT(color){
+    const g = new THREE.Group();
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(18, 2, 18), matStd(0x304b3a, 0.2, 0.7)); frame.position.y = 12; frame.castShadow = frame.receiveShadow = true; g.add(frame);
+    const mast = new THREE.Mesh(new THREE.BoxGeometry(2.6, 26, 2.6), matStd(color, 0.15, 0.35)); mast.position.y = 0; mast.castShadow = mast.receiveShadow = true; g.add(mast);
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 30, 24), matStd(0xffffff, 0.1, 0.2)); rod.position.y = -10; rod.castShadow = true; g.add(rod);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(2.4, 4, 24), matStd(color, 0.3, 0.2)); tip.position.y = -27; tip.castShadow = true; g.add(tip);
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(20, 20, 2, 48), matStd(0x243534, 0.1, 0.9)); pad.position.y = -28.2; pad.receiveShadow = true; g.add(pad);
+    g.userData.anim = (t)=>{ rod.position.y = -10 + Math.sin(t*1.4)*1.2; tip.position.y = -27 + Math.sin(t*1.4)*1.2; };
+    return g;
+  }
+  function buildSensor(color){
+    const g = new THREE.Group();
+    const box = new THREE.Mesh(new THREE.BoxGeometry(20, 14, 10), matStd(color, 0.3, 0.35)); box.castShadow = box.receiveShadow = true; g.add(box);
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(14, 8), new THREE.MeshStandardMaterial({color:0x223244, emissive:0x223244, emissiveIntensity:0.4})); screen.position.set(0, 0.5, 5.1); g.add(screen);
+    const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 16, 12), matStd(0xffffff, 0.2, 0.4)); antenna.position.set(-7, 12, -2); antenna.castShadow = true; g.add(antenna);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(1.2, 16, 12), matStd(0xffffff, 0.2, 0.4)); cap.position.copy(antenna.position).y += 8; g.add(cap);
+    g.userData.anim = (t)=>{ antenna.rotation.z = 0.25*Math.sin(t*1.2); };
+    return g;
+  }
+  function buildPerson(color){
+    const g = new THREE.Group();
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(8, 10, 6, 16), matStd(color, 0.2, 0.6)); torso.position.y = -6; torso.castShadow = torso.receiveShadow = true; g.add(torso);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(6, 24, 16), matStd(0xe6c7a8, 0.1, 0.6)); head.position.y = 6; head.castShadow = head.receiveShadow = true; g.add(head);
+    const clipboard = new THREE.Mesh(new THREE.BoxGeometry(8, 10, 0.8), matStd(0xc0d5ff, 0.1, 0.4)); clipboard.position.set(6, -2, 8); clipboard.rotation.x = -0.4; clipboard.castShadow = true; g.add(clipboard);
+    g.userData.anim = (t)=>{ clipboard.rotation.x = -0.4 + 0.05*Math.sin(t*1.3); };
+    return g;
+  }
+  function buildDocs(color){
+    const g = new THREE.Group();
+    const cover = new THREE.Mesh(new THREE.BoxGeometry(22, 2, 16), matStd(color, 0.1, 0.4)); cover.rotation.x = Math.PI/2; cover.castShadow = cover.receiveShadow = true; g.add(cover);
+    const pages = new THREE.Mesh(new THREE.BoxGeometry(20, 1.4, 14), matStd(0xf2f5ff, 0, 0.9)); pages.position.y = -0.7; pages.rotation.x = Math.PI/2; pages.castShadow = pages.receiveShadow = true; g.add(pages);
+    const band = new THREE.Mesh(new THREE.BoxGeometry(20, 0.4, 3), matStd(0x6f84b8, 0.1, 0.5)); band.position.set(0, 0.6, 0); band.rotation.x = Math.PI/2; g.add(band);
+    g.userData.anim = (t)=>{ band.position.y = 0.6 + 0.2*Math.sin(t*1.1); };
+    return g;
+  }
+  function buildAPI(color){ // cloud + cube to suggest API
+    const g = new THREE.Group();
+    const cloudMat = matStd(color, 0.2, 0.65);
+    const s1 = new THREE.Mesh(new THREE.SphereGeometry(8, 24, 16), cloudMat); s1.position.set(-8, 2, 0); s1.castShadow = s1.receiveShadow = true; g.add(s1);
+    const s2 = new THREE.Mesh(new THREE.SphereGeometry(10, 24, 16), cloudMat); s2.position.set(0, 4, 0); s2.castShadow = s2.receiveShadow = true; g.add(s2);
+    const s3 = new THREE.Mesh(new THREE.SphereGeometry(8, 24, 16), cloudMat); s3.position.set(8, 2, 0); s3.castShadow = s3.receiveShadow = true; g.add(s3);
+    const cube = new THREE.Mesh(new THREE.BoxGeometry(8, 8, 8), matStd(0xffffff, 0.1, 0.2)); cube.position.set(0, -6, 0); cube.castShadow = cube.receiveShadow = true; g.add(cube);
+    // tiny packet particles
+    const pkt = new THREE.Mesh(new THREE.BoxGeometry(1.8,1.8,1.8), matStd(0xffffff,0.1,0.3)); pkt.position.set(-12, 8, 0); g.add(pkt);
+    g.userData.anim = (t)=>{ pkt.position.x = -12 + (Math.sin(t*1.6)+1)*12; };
+    return g;
+  }
+
+  // Build Enhanced Hub
+  const hubGroup = new THREE.Group(); scene.add(hubGroup);
+
+  // Main hub core with enhanced materials
+  const hubCore = new THREE.Mesh(
+    new THREE.TorusKnotGeometry(18, 4.2, 120, 16),
+    matGlow(0x87cefa, 0.3)
+  );
+  hubCore.castShadow = hubCore.receiveShadow = true;
+  hubGroup.add(hubCore);
+
+  // Add energy rings around the hub
+  const ring1 = new THREE.Mesh(
+    new THREE.TorusGeometry(22, 1, 8, 32),
+    matGlow(0x87cefa, 0.2)
+  );
+  hubGroup.add(ring1);
+
+  const ring2 = new THREE.Mesh(
+    new THREE.TorusGeometry(26, 0.8, 6, 24),
+    matGlow(0xaad4ff, 0.15)
+  );
+  hubGroup.add(ring2);
+
+  // Add processing nodes on the hub
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2;
+    const node = new THREE.Mesh(
+      new THREE.SphereGeometry(1.5, 12, 8),
+      matGlow(0xffffff, 0.4)
+    );
+    node.position.set(
+      Math.cos(angle) * 20,
+      Math.sin(angle * 0.7) * 8,
+      Math.sin(angle) * 20
+    );
+    hubGroup.add(node);
+  }
+
+  // Enhanced label with better positioning
+  const hubLbl = labelSprite('INPUTS HUB');
+  const bb = new THREE.Box3().setFromObject(hubCore);
+  hubLbl.position.set(0, bb.max.y + 16, 0);
+  hubGroup.add(hubLbl);
+
+  hubGroup.position.set(0, 0, 0);
+  hubGroup.userData = {
+    kind: 'hub',
+    title: 'Inputs Hub',
+    body: 'Intelligent processing engine that normalizes all data sources into a unified canonical schema for seamless reasoning.',
+    examples: 'Any source → Single interface → Consistent parameters'
+  };
+
+  updateLoading(6);
+
+  // Add hub rotation animation
+  hubGroup.userData.anim = (t) => {
+    hubCore.rotation.y = t * 0.2;
+    ring1.rotation.x = t * 0.15;
+    ring1.rotation.z = t * 0.1;
+    ring2.rotation.y = -t * 0.25;
+    ring2.rotation.x = t * 0.08;
+  };
+
+  // Sources (added External API)
+  const sources = [
+    {id:'lab',      color:0x88e0ff, title:'Lab tests',        body:'Standard Proctor, triaxial, oedometer, Atterberg, SWCC.', ex:'CSV, LIMS, PDFs → parsed & validated.', builder:()=>buildFlask(0x88e0ff)},
+    {id:'insitu',   color:0xa9ff8a, title:'In-situ tests',    body:'CPT/CPTu, SPT, DCP, vane shear, deflection/rutting.',   ex:'Logger feeds or uploads.', builder:()=>buildCPT(0xa9ff8a)},
+    {id:'realtime', color:0xffd36c, title:'Real-time sensors',body:'Piezometers, settlement plates, strain, smart rollers.', ex:'MQTT/HTTP streams with QC.', builder:()=>buildSensor(0xffd36c)},
+    {id:'sat',      color:0xb49cff, title:'Satellite / remote',body:'InSAR, optical, lidar, weather & satellite soil moisture.', ex:'Raster/tiles + georegistration.', builder:()=>buildSatellite(0xb49cff)},
+    {id:'pract',    color:0x8ef5c0, title:'Practitioner input',body:'Field notes, photos, qualitative descriptors.',         ex:'Text → canonical codes (USCS, etc.).', builder:()=>buildPerson(0x8ef5c0)},
+    {id:'docs',     color:0xc0d5ff, title:'Docs & drawings',  body:'Borehole logs, specs, plans, BIM extracts.',            ex:'OCR & structured parsers.', builder:()=>buildDocs(0xc0d5ff)},
+    {id:'api',      color:0x7fe0ff, title:'External API',     body:'Live feed from Open‑Meteo for Melbourne (example).',   ex:'temperature_2m, wind_speed_10m.', builder:()=>buildAPI(0x7fe0ff)},
+  ];
+
+  const radiusOrbit = 190;
+  const nodes = []; const edges = []; const pulses = [];
+
+  sources.forEach((src, i)=>{
+    const a = (i / sources.length) * Math.PI*2;
+    const x = Math.cos(a) * radiusOrbit;
+    const z = Math.sin(a) * radiusOrbit;
+    const y = Math.sin(a) * 26;
+
+    const g = new THREE.Group();
+    const model = src.builder(); model.castShadow = true;
+    const lbl = labelSprite(src.title);
+
+    model.position.y = 0;
+    const bb = new THREE.Box3().setFromObject(model);
+    lbl.position.set(0, bb.max.y + 10, 0);
+
+    g.add(model, lbl);
+    g.position.set(x, y, z);
+    g.lookAt(0, 0, 0);
+    g.userData = { kind:'source', id:src.id, color:src.color, title:src.title, body:src.body, ex:src.ex, model };
+    scene.add(g);
+    nodes.push(g);
+
+    const mid = new THREE.Vector3(x*0.5, y + 40, z*0.5);
+    const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(x,y,z), mid, new THREE.Vector3(0,0,0));
+    const pts = curve.getPoints(32);
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({color:src.color, transparent:true, opacity:0.9});
+    const line = new THREE.Line(geo, mat); scene.add(line);
+
+    // Enhanced pulse with glow effect
+    const pulseGeom = new THREE.SphereGeometry(2.8, 16, 16);
+    const pulseMat  = matGlow(src.color, 0.6);
+    const pulse = new THREE.Mesh(pulseGeom, pulseMat);
+    pulse.position.copy(pts[0]);
+    scene.add(pulse);
+
+    // Enhanced particle trail effect with data type indicators
+    const trailParticles = [];
+    const dataTypes = ['soil', 'water', 'structure', 'climate', 'material', 'test', 'sensor', 'api'];
+    for (let j = 0; j < 12; j++) {
+      const dataType = dataTypes[j % dataTypes.length];
+      const particleGeometry = j % 3 === 0 ? new THREE.SphereGeometry(0.4, 8, 6) : new THREE.BoxGeometry(0.3, 0.3, 0.3);
+
+      // Color-code particles by data type
+      let particleColor = src.color;
+      if (dataType === 'api') particleColor = 0x7fe0ff;
+      else if (dataType === 'sensor') particleColor = 0xffd36c;
+      else if (dataType === 'test') particleColor = 0x88e0ff;
+
+      const particle = new THREE.Mesh(
+        particleGeometry,
+        matGlow(particleColor, 0.6)
+      );
+      particle.visible = false;
+      particle.userData = { dataType, source: src.id };
+      scene.add(particle);
+      trailParticles.push(particle);
+    }
+
+    edges.push({line, mat, color:src.color});
+    pulses.push({
+      mesh: pulse,
+      curve,
+      t: Math.random(),
+      speed: 0.15 + Math.random()*0.1,
+      trail: trailParticles,
+      trailIndex: 0,
+      dataTypes: dataTypes,
+      lastTrailUpdate: 0
+    });
+  });
+
+  // Info panel hooks
+  const infoTitle = document.getElementById('pTitle');
+  const infoBody  = document.getElementById('pBody');
+  const infoKvs   = document.getElementById('pKvs');
+  const infoMicro = document.getElementById('pMicro');
+
+  function setKVs(html){ infoKvs.innerHTML = `<div class="kvs">${html}</div>`; }
+
+  // Enhanced transition system
+  let transitionProgress = 0;
+  let isTransitioning = false;
+  let targetScales = new Map();
+  let targetOpacities = new Map();
+  let targetPositions = new Map();
+  let transitionDuration = 800; // ms
+  let transitionStartTime = 0;
+
+  // Enhanced interpolation functions
+  function lerp(a, b, t) {
+    return a + (b - a) * Math.min(Math.max(t, 0), 1);
+  }
+
+  function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  function easeInOutQuad(t) {
+    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  }
+
+  // Smooth camera transitions
+  let cameraTransition = {
+    active: false,
+    startPos: { x: 0, y: 0, z: 0 },
+    targetPos: { x: 0, y: 0, z: 0 },
+    startYaw: 0,
+    targetYaw: 0,
+    startPitch: 0,
+    targetPitch: 0,
+    progress: 0
+  };
+
+  function startCameraTransition(targetYaw, targetPitch, targetRadius) {
+    cameraTransition.active = true;
+    cameraTransition.startPos = { x: radius * Math.sin(yaw), y: radius * Math.sin(pitch), z: radius * Math.cos(yaw) };
+    cameraTransition.targetPos = {
+      x: targetRadius * Math.sin(targetYaw),
+      y: targetRadius * Math.sin(targetPitch),
+      z: targetRadius * Math.cos(targetYaw)
+    };
+    cameraTransition.startYaw = yaw;
+    cameraTransition.targetYaw = targetYaw;
+    cameraTransition.startPitch = pitch;
+    cameraTransition.targetPitch = targetPitch;
+    cameraTransition.progress = 0;
+    radius = targetRadius;
+  }
+
+  function selectNode(obj){
+    isTransitioning = true;
+    transitionStartTime = performance.now();
+    transitionProgress = 0;
+
+    // Enhanced target states with position transitions
+    nodes.forEach(n => {
+      const isSelected = obj === n;
+      targetScales.set(n, isSelected ? 1.2 : 0.95);
+      if (isSelected && n.userData && n.userData.id) {
+        // Calculate optimal camera position for selected node
+        const nodePos = n.position;
+        const distance = 200;
+        const targetYaw = Math.atan2(nodePos.x, nodePos.z);
+        const targetPitch = Math.asin(nodePos.y / distance) * 0.5;
+        startCameraTransition(targetYaw, targetPitch, distance);
+      }
+    });
+
+    edges.forEach((e, idx) => {
+      const isSelectedEdge = obj && nodes.includes(obj) && nodes.indexOf(obj) === idx;
+      targetOpacities.set(e, isSelectedEdge ? 1.0 : (obj ? 0.2 : 0.8));
+    });
+
+    // Update info panel immediately for responsiveness
+    if (obj && obj.userData && obj.userData.kind){
+      const d = obj.userData;
+      infoTitle.textContent = d.title || 'Inputs';
+      infoBody.textContent  = d.body  || '';
+
+      // Enhanced data visualization
+      let rows = `<small>Examples</small><span>${d.ex || '—'}</span>
+                  <small>Validation</small><span>Unit checks · ranges · referential integrity</span>
+                  <small>Mapping</small><span>Canonical parameters & entities</span>`;
+
+      // Add data quality metrics
+      const qualityScore = d.id === 'api' ? (externalData.current ? 95 : 20) :
+                          d.id === 'lab' ? 88 :
+                          d.id === 'insitu' ? 92 :
+                          d.id === 'realtime' ? 78 :
+                          d.id === 'sat' ? 85 :
+                          d.id === 'pract' ? 65 :
+                          d.id === 'docs' ? 72 : 90;
+
+      rows += `<small>Data Quality</small><div class="metric">
+                  <div class="metric-bar">
+                    <div class="metric-fill" style="width:${qualityScore}%"></div>
+                  </div>
+                  <span class="metric-value">${qualityScore}%</span>
+                </div>`;
+
+      // Add processing status
+      const statusClass = d.id === 'api' ? (externalData.current ? 'status-active' : 'status-error') : 'status-active';
+      const statusText = d.id === 'api' ? (externalData.current ? 'Live' : 'Offline') : 'Active';
+      rows += `<small>Status</small><span class="status-indicator ${statusClass}">${statusText}</span>`;
+
+      // Add data volume indicator
+      const volumeScore = d.id === 'api' ? 15 :
+                         d.id === 'lab' ? 85 :
+                         d.id === 'insitu' ? 60 :
+                         d.id === 'realtime' ? 45 :
+                         d.id === 'sat' ? 90 :
+                         d.id === 'pract' ? 25 :
+                         d.id === 'docs' ? 70 : 50;
+
+      rows += `<small>Data Volume</small><div class="metric">
+                  <div class="metric-bar">
+                    <div class="metric-fill" style="width:${volumeScore}%"></div>
+                  </div>
+                  <span class="metric-value">${volumeScore}%</span>
+                </div>`;
+
+      // if API node, add live data row with enhanced formatting
+      if (d.id === 'api'){
+        let sample = 'Loading…';
+        let status = 'status-inactive';
+        if (externalData.error) {
+          sample = 'Connection failed';
+          status = 'status-error';
+        } else if (externalData.current) {
+          sample = `${externalData.current.temperature_2m}°C • ${externalData.current.wind_speed_10m} m/s wind`;
+          status = 'status-active';
+        }
+        rows += `<small>Live Data</small><span class="status-indicator ${status}">${sample}</span>`;
+      }
+      setKVs(rows);
+      infoMicro.textContent = d.id==='api' ? 'External API updates every 2 minutes.' : 'Press Esc to return to the page (in the parent) or click the hub to reset.';
+    }else{
+      infoTitle.textContent = 'Everything in, one format out';
+      infoBody.textContent  = 'Spider ingests lab, in-situ, real-time, satellite, practitioner, document sources and external APIs.';
+      setKVs(`<small>Examples</small><span>Standard Proctor, CPT/CPTu, piezo, InSAR, notes, PDFs, API feeds</span>
+              <small>Validation</small><span>Unit checks, ranges, cross-field rules</span>
+              <small>Mapping</small><span>Canonical parameters (e, Gs, ρ, φ, …)</span>`);
+    }
+  }
+
+  // Picking
+  const ray = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  const pickables = nodes.concat([hubGroup]);
+  function onClick(ev){
+    const rect = canvas.getBoundingClientRect();
+    mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+    ray.setFromCamera(mouse, camera);
+    const hits = ray.intersectObjects(pickables, true);
+    const hit = hits.find(h => h.object && (h.object.parent === hubGroup || nodes.includes(h.object.parent) || nodes.includes(h.object)));
+    if (hit){ let obj = hit.object; while (obj && !nodes.includes(obj) && obj !== hubGroup) obj = obj.parent; selectNode(obj); }
+  }
+  canvas.addEventListener('click', onClick);
+
+  // Enhanced interaction system with hover effects
+  let dragging = false, lastX = 0, lastY = 0;
+  let hoveredObject = null;
+  let hoverIntensity = 0;
+
+  canvas.addEventListener('pointerdown', (e)=>{
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    canvas.setPointerCapture(e.pointerId);
+  });
+
+  canvas.addEventListener('pointermove', (e)=>{
+    const rect = canvas.getBoundingClientRect();
+    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    if (!dragging) {
+      // Handle hover effects
+      ray.setFromCamera(mouse, camera);
+      const hits = ray.intersectObjects(pickables, true);
+      const hit = hits.find(h => h.object && (h.object.parent === hubGroup || nodes.includes(h.object.parent) || nodes.includes(h.object)));
+
+      let newHoveredObject = null;
+      if (hit) {
+        let obj = hit.object;
+        while (obj && !nodes.includes(obj) && obj !== hubGroup) obj = obj.parent;
+        newHoveredObject = obj;
+      }
+
+      if (newHoveredObject !== hoveredObject) {
+        hoveredObject = newHoveredObject;
+        hoverIntensity = 0;
+        canvas.style.cursor = hoveredObject ? 'pointer' : 'grab';
+      }
+    } else {
+      // Handle camera movement
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      yaw -= dx * 0.006;
+      pitch -= dy * 0.003;
+      pitch = Math.max(-1.2, Math.min(1.2, pitch));
+      updateCam();
+    }
+  });
+
+  canvas.addEventListener('pointerup', (e)=>{
+    dragging = false;
+    canvas.style.cursor = hoveredObject ? 'pointer' : 'grab';
+  });
+
+  canvas.addEventListener('wheel', (e)=>{
+    e.preventDefault();
+    radius *= (1 + Math.sign(e.deltaY) * 0.1);
+    radius = Math.max(140, Math.min(460, radius));
+    updateCam();
+  }, {passive:false});
+
+  // Add hover visual feedback to animation loop
+  function updateHoverEffects(deltaTime) {
+    if (hoveredObject) {
+      hoverIntensity = Math.min(1, hoverIntensity + deltaTime * 2);
+      if (nodes.includes(hoveredObject)) {
+        const baseScale = targetScales.get(hoveredObject) || 1.0;
+        const hoverScale = baseScale * (1 + hoverIntensity * 0.05);
+        hoveredObject.scale.set(hoverScale, hoverScale, hoverScale);
+      }
+    } else {
+      hoverIntensity = Math.max(0, hoverIntensity - deltaTime * 3);
+    }
+  }
+
+  // Enhanced reset with smooth camera transition
+  function resetView() {
+    startCameraTransition(0.6, 0.35, 280);
+  }
+
+  const btnReset = document.getElementById('btnReset');
+  btnReset.addEventListener('click', resetView);
+
+  // Enhanced keyboard navigation
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      // Reset view on Escape
+      resetView();
+    } else if (e.key === ' ') {
+      // Space bar to pause/play (if we had autorotate)
+      e.preventDefault();
+    } else if (e.key === 'r' || e.key === 'R') {
+      // R key to reset
+      resetView();
+    } else if (e.key >= '1' && e.key <= '7') {
+      // Number keys to select specific sources
+      const sourceIndex = parseInt(e.key) - 1;
+      if (sourceIndex < nodes.length) {
+        selectNode(nodes[sourceIndex]);
+      }
+    }
+  });
+
+  // Add visual feedback for keyboard shortcuts
+  const shortcuts = document.createElement('div');
+  shortcuts.style.cssText = `
+    position: absolute; bottom: 16px; left: 16px; z-index: 6;
+    font: 600 11px ui-sans-serif; color: #9eb0d7;
+    background: rgba(12,18,32,.8); border: 1px solid #24304c;
+    border-radius: 6px; padding: 8px; backdrop-filter: blur(4px);
+    opacity: 0; transition: opacity 0.3s ease;
+  `;
+  shortcuts.innerHTML = `
+    <div style="margin-bottom: 4px; color: #60a5fa;">Keyboard Shortcuts:</div>
+    <div>ESC - Reset view</div>
+    <div>R - Reset view</div>
+    <div>1-7 - Select source</div>
+    <div>Space - Pause/Play</div>
+  `;
+  document.body.appendChild(shortcuts);
+
+  // Show shortcuts on focus
+  canvas.addEventListener('focus', () => {
+    shortcuts.style.opacity = '1';
+  });
+  canvas.addEventListener('blur', () => {
+    shortcuts.style.opacity = '0';
+  });
+
+  // === External API (Open‑Meteo) ===
+  const apiUrl = 'https://api.open-meteo.com/v1/forecast?latitude=-37.8136&longitude=144.9631&current=temperature_2m,wind_speed_10m&timezone=Australia%2FMelbourne';
+  let externalData = {status:'init'};
+  async function fetchExternal(){
+    try{
+      const res = await fetch(apiUrl, {mode:'cors'});
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      const json = await res.json();
+      externalData = json;
+      // Optional: modulate the API edge pulse speed by wind speed
+      const idx = nodes.findIndex(n=>n.userData.id==='api');
+      if (idx>=0 && pulses[idx]){
+        const wind = (json.current && json.current.wind_speed_10m) ? json.current.wind_speed_10m : 0;
+        pulses[idx].speed = 0.12 + Math.min(0.3, wind*0.02);
+      }
+      // If API node is selected, refresh the side panel rows
+      const sel = document.querySelector('#pTitle').textContent === 'External API';
+      if (sel){ selectNode(nodes.find(n=>n.userData.id==='api')); }
+    }catch(e){
+      console.warn('API fetch failed', e);
+      externalData = {error:true};
+    }
+  }
+  fetchExternal();
+  setInterval(fetchExternal, 120000); // refresh every 2 min
+
+  updateLoading(7);
+
+  // Enhanced Animation System
+  const clock = new THREE.Clock();
+  let lastTime = 0;
+
+  function animate(){
+    requestAnimationFrame(animate);
+    const t = clock.getElapsedTime();
+    const deltaTime = t - lastTime;
+    lastTime = t;
+
+    // per-node micro animations
+    nodes.forEach(g=>{
+      if (g.userData && g.userData.model && g.userData.model.userData && typeof g.userData.model.userData.anim === 'function'){
+        g.userData.model.userData.anim(t);
+      }else if (g.userData && typeof g.userData.anim === 'function'){
+        g.userData.anim(t);
+      }
+    });
+
+    // Hub animation
+    if (hubGroup.userData.anim) {
+      hubGroup.userData.anim(t);
+    }
+
+    // Enhanced pulse animation with sophisticated particle trails
+    pulses.forEach(p => {
+      p.t += p.speed * 0.008;
+      if (p.t > 1) p.t = 0;
+
+      const pos = p.curve.getPoint(p.t);
+      p.mesh.position.copy(pos);
+
+      // Enhanced particle trail with data transformation effects
+      if (p.trail && p.trail.length > 0) {
+        const currentTime = t * 1000;
+
+        // Update trail particles at variable intervals for more natural flow
+        if (currentTime - p.lastTrailUpdate > 100 + Math.random() * 200) {
+          p.trailIndex = (p.trailIndex + 1) % p.trail.length;
+          const trailOffset = 0.03 + Math.random() * 0.04;
+          const trailPos = p.curve.getPoint(Math.max(0, p.t - trailOffset));
+
+          const particle = p.trail[p.trailIndex];
+          particle.position.copy(trailPos);
+          particle.visible = true;
+
+          // Add slight randomness to trail position for organic feel
+          particle.position.x += (Math.random() - 0.5) * 8;
+          particle.position.y += (Math.random() - 0.5) * 4;
+          particle.position.z += (Math.random() - 0.5) * 8;
+
+          // Animate particle scale for data processing effect
+          const scalePulse = 0.8 + 0.4 * Math.sin(t * 4 + p.trailIndex);
+          particle.scale.set(scalePulse, scalePulse, scalePulse);
+
+          p.lastTrailUpdate = currentTime;
+        }
+
+        // Enhanced fade out with data transformation visualization
+        p.trail.forEach((particle, i) => {
+          const age = (p.trailIndex - i + p.trail.length) % p.trail.length;
+          const ageRatio = age / p.trail.length;
+
+          // Non-linear fade out for more dramatic effect
+          const opacity = Math.max(0, Math.pow(1 - ageRatio, 2));
+          if (particle.material) {
+            particle.material.opacity = opacity * 0.7;
+
+            // Color transition to show data processing
+            if (ageRatio > 0.7) {
+              particle.material.emissive.setHex(0x10b981); // Success green when processed
+            } else if (ageRatio > 0.4) {
+              particle.material.emissive.setHex(0xf59e0b); // Processing amber
+            }
+
+            particle.visible = opacity > 0.05;
+          }
+        });
+      }
+
+      // Enhanced pulse size animation with data bursts
+      const baseScale = 1 + 0.4 * Math.sin(t * 6 + p.t * Math.PI * 2);
+      const burstScale = p.t > 0.9 ? 1.8 : 1; // Burst effect near hub
+      const finalScale = baseScale * burstScale;
+      p.mesh.scale.set(finalScale, finalScale, finalScale);
+
+      // Add glow intensity variation
+      if (p.mesh.material && p.mesh.material.emissiveIntensity !== undefined) {
+        p.mesh.material.emissiveIntensity = 0.3 + 0.4 * Math.sin(t * 4 + p.t * Math.PI);
+      }
+    });
+
+    // Handle enhanced smooth transitions
+    if (isTransitioning) {
+      const currentTime = performance.now();
+      const elapsed = currentTime - transitionStartTime;
+      transitionProgress = Math.min(elapsed / transitionDuration, 1);
+      const easedProgress = easeOutCubic(transitionProgress);
+
+      if (transitionProgress >= 1) {
+        isTransitioning = false;
+        transitionProgress = 1;
+      }
+
+      // Apply smooth scaling transitions with enhanced easing
+      nodes.forEach(node => {
+        const targetScale = targetScales.get(node) || 1.0;
+        const currentScale = node.scale.x;
+        const newScale = lerp(currentScale, targetScale, easedProgress);
+        node.scale.set(newScale, newScale, newScale);
+      });
+
+      // Apply smooth opacity transitions with enhanced easing
+      edges.forEach(edge => {
+        const targetOpacity = targetOpacities.get(edge) || 0.8;
+        const currentOpacity = edge.mat.opacity;
+        const newOpacity = lerp(currentOpacity, targetOpacity, easedProgress);
+        edge.mat.opacity = Math.max(0, Math.min(1, newOpacity));
+      });
+    }
+
+    // Handle camera transitions
+    if (cameraTransition.active) {
+      cameraTransition.progress += 0.02;
+      const easedProgress = easeInOutQuad(cameraTransition.progress);
+
+      if (cameraTransition.progress >= 1) {
+        cameraTransition.active = false;
+        cameraTransition.progress = 1;
+        yaw = cameraTransition.targetYaw;
+        pitch = cameraTransition.targetPitch;
+      } else {
+        yaw = lerp(cameraTransition.startYaw, cameraTransition.targetYaw, easedProgress);
+        pitch = lerp(cameraTransition.startPitch, cameraTransition.targetPitch, easedProgress);
+      }
+
+      updateCam();
+    }
+
+    // Dynamic lighting animation
+    if (hubLight) {
+      hubLight.intensity = 0.8 + 0.4 * Math.sin(t * 0.5);
+    }
+
+    // Update hover effects
+    updateHoverEffects(deltaTime);
+
+    // Add subtle camera breathing effect
+    camera.position.y += Math.sin(t * 0.3) * 0.1;
+
+    // Update HUD with real-time data flow information
+    updateHUD(t);
+
+    resize();
+    renderer.render(scene, camera);
+  }
+
+  function updateHUD(t) {
+    const hudStatus = document.getElementById('hudStatus');
+    const hudStreams = document.getElementById('hudStreams');
+    const hudThroughput = document.getElementById('hudThroughput');
+
+    // Calculate active data streams
+    const activeStreams = pulses.filter(p => p.trail.some(particle => particle.visible)).length;
+    hudStreams.textContent = activeStreams + ' active';
+
+    // Simulate varying throughput based on active streams
+    const baseThroughput = 2.4;
+    const throughputVariation = Math.sin(t * 0.5) * 0.3;
+    const currentThroughput = (baseThroughput + throughputVariation + activeStreams * 0.2).toFixed(1);
+    hudThroughput.textContent = currentThroughput + ' MB/s';
+
+    // Status based on system activity
+    const statuses = ['processing', 'optimizing', 'streaming', 'analyzing', 'transforming'];
+    const statusIndex = Math.floor(t * 0.3) % statuses.length;
+    hudStatus.textContent = statuses[statusIndex];
+  }
+  animate();
+  hideLoading();
+
+  // Enhanced Keyboard Navigation and Accessibility
+  let currentFocusIndex = -1;
+  const focusableObjects = [hubGroup, ...nodes];
+  const infoPanel = document.getElementById('infoPanel');
+
+  // Announce changes to screen readers
+  function announceToScreenReader(message) {
+    const announcement = document.createElement('div');
+    announcement.setAttribute('aria-live', 'polite');
+    announcement.setAttribute('aria-atomic', 'true');
+    announcement.style.position = 'absolute';
+    announcement.style.left = '-10000px';
+    announcement.style.width = '1px';
+    announcement.style.height = '1px';
+    announcement.style.overflow = 'hidden';
+    announcement.textContent = message;
+    document.body.appendChild(announcement);
+    setTimeout(() => document.body.removeChild(announcement), 1000);
+  }
+
+  // Keyboard navigation
+  document.addEventListener('keydown', (e)=>{
+    if (e.key === 'Escape'){
+      try{ window.parent.postMessage({source:'spider-anim', cmd:'exit'}, '*'); }catch(_){/* noop */}
+      announceToScreenReader('Exiting visualization');
+      return;
+    }
+
+    if (e.key === 'Tab' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      currentFocusIndex = (currentFocusIndex + 1) % focusableObjects.length;
+      const obj = focusableObjects[currentFocusIndex];
+      selectNode(obj);
+      announceToScreenReader(`Selected ${obj.userData.title}`);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      currentFocusIndex = currentFocusIndex <= 0 ? focusableObjects.length - 1 : currentFocusIndex - 1;
+      const obj = focusableObjects[currentFocusIndex];
+      selectNode(obj);
+      announceToScreenReader(`Selected ${obj.userData.title}`);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (currentFocusIndex >= 0) {
+        const obj = focusableObjects[currentFocusIndex];
+        selectNode(obj);
+        announceToScreenReader(`Activated ${obj.userData.title}`);
+      }
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      currentFocusIndex = 0;
+      selectNode(focusableObjects[0]);
+      announceToScreenReader(`Selected ${focusableObjects[0].userData.title}`);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      currentFocusIndex = focusableObjects.length - 1;
+      const obj = focusableObjects[currentFocusIndex];
+      selectNode(obj);
+      announceToScreenReader(`Selected ${obj.userData.title}`);
+    }
+  });
+
+  // Add ARIA labels to interactive elements
+  canvas.setAttribute('role', 'application');
+  canvas.setAttribute('aria-label', '3D visualization of Spider data inputs. Use arrow keys to navigate between data sources, Enter to select, and Escape to exit.');
+  canvas.setAttribute('tabindex', '0');
+
+  // Focus management
+  canvas.addEventListener('focus', () => {
+    announceToScreenReader('Entered 3D visualization. Use arrow keys to navigate data sources.');
+  });
+
+  canvas.addEventListener('blur', () => {
+    currentFocusIndex = -1;
+  });
+
+})();
+</script>
+</body>
+</html>

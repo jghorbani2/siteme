@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Computational Geomechanics Projects</title>
+  <meta name="description" content="Computational Geomechanics projects." />
+  <link rel="stylesheet" href="assets/style.css" />
+  
+  <style>
+    .placeholder{ background:var(--card); border:1px solid var(--stroke); border-radius:14px; padding:14px; box-shadow: var(--shadow); }
+    .back-row{ display:flex; justify-content:space-between; align-items:center; margin: 0 0 12px; }
+    /* Overlay for publications modal */
+    .pubs-overlay{ position:fixed; inset:0; z-index:10000; display:none; align-items:center; justify-content:center; }
+    .pubs-overlay.active{ display:flex }
+    .pubs-overlay .scrim{ position:absolute; inset:0; background:rgba(9,14,24,0.85); backdrop-filter: blur(6px); }
+    .pubs-modal{ position:relative; z-index:1; width:min(760px, 92vw); max-height: 80vh; overflow:auto; background:rgba(18,26,44,.97); border:1px solid var(--stroke); border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,0.5); padding:16px; }
+    .pubs-modal h3{ margin:0 0 8px; font-size:16px; color:var(--ink) }
+    .pubs-modal .entry{ margin:6px 0; color:#dbe7ff; font-size:14px; }
+    .pubs-close{ position:absolute; right:10px; top:10px; border:1px solid var(--edge); border-radius:10px; background:rgba(20,30,50,.9); color:#cfe0ff; padding:6px 10px; cursor:pointer }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="site-header" role="banner" aria-label="Site header">
+    <div class="container header-inner">
+      <a class="brand" href="index.html" aria-label="Home"><span>Javad Ghorbani</span></a>
+      <nav class="nav" aria-label="Primary">
+        <ul>
+          <li class="nav-dropdown">
+            <a href="index.html#projects">Projects</a>
+            <div class="dropdown-menu">
+              <div class="dropdown-item has-sub">
+                <a href="ai-projects.html">Artificial Intelligence</a>
+                <div class="dropdown-submenu">
+                  <a href="ai-projects.html#overview">Overview</a>
+                  <a href="#ai-demo">Live Demo</a>
+                  <a href="#ai-code">Source Code</a>
+                  <a href="#ai-paper">Research Paper</a>
+                </div>
+              </div>
+              <div class="dropdown-item has-sub">
+                <a href="geomechanics-projects.html">Computational Geomechanics</a>
+                <div class="dropdown-submenu">
+                  <a href="geomechanics-projects.html#overview">Overview</a>
+                  <a href="#geomechanics-sim">Interactive Simulation</a>
+                  <a href="#geomechanics-docs">Documentation</a>
+                  <a href="#geomechanics-research">Research</a>
+                </div>
+              </div>
+            </div>
+          </li>
+          <li><a href="index.html#about">About</a></li>
+          <li><a class="btn btn-sm" href="index.html#contact-me">Contact</a></li>
+        </ul>
+      </nav>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="nav-drawer" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+    <div id="nav-drawer" class="nav-drawer" hidden>
+      <a href="index.html#projects">Projects</a>
+      <div class="drawer-submenu">
+        <a href="ai-projects.html">• Artificial Intelligence</a>
+        <a href="geomechanics-projects.html">• Computational Geomechanics</a>
+      </div>
+      <a href="index.html#about">About</a>
+      <a href="index.html#contact-me" class="btn btn-sm">Contact</a>
+    </div>
+  </header>
+
+  <script>
+    // Mobile nav behavior parity with index.html
+    (function(){
+      const btn = document.querySelector('.nav-toggle');
+      const drawer = document.getElementById('nav-drawer');
+      if (!btn || !drawer) return;
+      function open(){ drawer.hidden = false; btn.setAttribute('aria-expanded','true'); document.documentElement.style.overflow = 'hidden'; }
+      function close(){ drawer.hidden = true; btn.setAttribute('aria-expanded','false'); document.documentElement.style.overflow = ''; }
+      btn.addEventListener('click', () => drawer.hidden ? open() : close());
+      drawer.addEventListener('click', (e) => { if (e.target && e.target.tagName === 'A') close(); });
+      window.addEventListener('keydown', e => { if (e.key === 'Escape' && !drawer.hidden) close(); });
+    })();
+  </script>
+
+  <main id="main">
+    <section class="stripe" aria-label="Computational Geomechanics Projects">
+      <div class="container">
+        <div class="back-row">
+          <h2 style="margin:0 0 6px; background: linear-gradient(135deg, #7bd4ff, #8ef5c0); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;">Computational Geomechanics</h2>
+          <a class="btn btn-ghost" href="index.html#projects">Back</a>
+        </div>
+        <p class="lede" style="max-width:80ch; margin:0 0 10px;">This portfolio showcases my computational geomechanics work across HM/THM multiphysics coupling; multiphase flow in deforming porous media; unsaturated soil dynamics and hydraulic hysteresis; large‑deformation elasto‑plasticity; contact mechanics and indentation; advanced constitutive modelling (stress‑induced anisotropy, SANISAND, kinematic hardening with memory surfaces, overshoot‑free integration); and AI‑assisted inference for compaction/NDT. Tooling includes finite element methods, algorithmic differentiation, surrogate modelling, reinforcement learning, PSO/MCTS optimizers, and explainable data‑ and physics‑informed workflows aimed at resilient infrastructure.</p>
+        <div class="cards">
+          <article class="card">
+            <header class="card-hero"><h3>Multiphysics & Fully Coupled</h3></header>
+            <p>HM/THM coupling and multiphase flow with large‑deformation elasto‑plasticity; dynamics of partially saturated media.</p>
+            <div class="btn-row"><button class="btn" data-cat="multiphysics">Open</button></div>
+          </article>
+
+          <article class="card">
+            <header class="card-hero"><h3>Unsaturated Soils</h3></header>
+            <p>Hydraulic hysteresis, dynamic compaction, seismic response and pore pressure dissipation in partially saturated granular soils.</p>
+            <div class="btn-row"><button class="btn" data-cat="unsaturated">Open</button></div>
+          </article>
+
+          <article class="card">
+            <header class="card-hero"><h3>Contact Mechanics</h3></header>
+            <p>Static/dynamic interaction and indentation of rigid objects with unsaturated soils; numerically robust plasticity in contact.</p>
+            <div class="btn-row"><button class="btn" data-cat="contact">Open</button></div>
+          </article>
+
+          <article class="card">
+            <header class="card-hero"><h3>Constitutive Modeling</h3></header>
+            <p>Stress‑induced anisotropy, cyclic hardening with memory surface, thermodynamically consistent effective stress, and overshoot‑free integration.</p>
+            <div class="btn-row"><button class="btn" data-cat="constitutive">Open</button></div>
+          </article>
+
+          <article class="card">
+            <header class="card-hero"><h3>AI‑Assisted Modelling & NDT</h3></header>
+            <p>Autonomous parameter identification, intelligent compaction/NDT inference, and generative computational AI for SANISAND.</p>
+            <div class="btn-row"><button class="btn" data-cat="ai">Open</button></div>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+  <div id="pubsOverlay" class="pubs-overlay" aria-hidden="true" role="dialog" aria-label="Publications">
+    <div class="scrim"></div>
+    <div class="pubs-modal">
+      <button id="pubsClose" class="pubs-close" aria-label="Close">×</button>
+      <h3 id="pubsTitle">Publications</h3>
+      <div id="pubsBody"></div>
+    </div>
+  </div>
+  <script>
+    (function(){
+      const DATA = {
+        constitutive: [
+          'Chen, L., Ghorbani, J., Dutta, T. T., Zhou, A., McCartney, J. S. and Kodikara, J., 2024. A new multi-surface plasticity model for cyclic hardening of unsaturated granular soils. Computers and Geotechnics, 173, 106500.',
+          'Chen, L., Ghorbani, J. and Kodikara, J., 2024. Modelling of shakedown, ratcheting and liquefaction of saturated granular soils using kinematic hardening with memory surface. Computers and Geotechnics, 165, 105830.',
+          'Chen, L., Ghorbani, J., Zhang, C. and Kodikara, J., 2022. Stress overshooting solution for soil plasticity models. Computers and Geotechnics, 152, 105008.',
+          'Ghorbani, J. and Airey, D. W., 2021. Modelling stress-induced anisotropy in multi-phase granular soils. Computational Mechanics, 67(2), 497–521.',
+          'Ghorbani, J., Nazem, M., Carter, J. and Sloan, S., 2018. Stress integration scheme for elasto-plastic response of unsaturated soils at large deformations. Computers and Geotechnics, 94, 231–246.',
+          'Ghorbani, J., Noorzad, A. and Shahnazari, H., 2014. A smart increment technique and its application to a bounding surface model. NUMGE 2014, 45–47.'
+        ],
+        unsaturated: [
+          'Airey, D. W. and Ghorbani, J., 2021. Analysis of unsaturated soil columns with application to bulk cargo liquefaction in ships. Computers and Geotechnics, 140, 104402.',
+          'Ghorbani, J. and Kodikara, J., 2023. Correction: Thermodynamically consistent effective stress formulation for unsaturated soils across a wide range of saturation. Computational Mechanics, 74(1), 223–223.',
+          'Ghorbani, J. and Kodikara, J., 2024. Thermodynamically consistent effective stress formulation for unsaturated soils across a wide range of soil saturation. Computational Mechanics, 73(5), 1077–1094.',
+          'Chen, L., Ghorbani, J., Zhang, C., Dutta, T. T. and Kodikara, J., 2021. A novel unified model for volumetric hardening and water retention in unsaturated soils. Computers and Geotechnics, 140, 104446.',
+          'Ghorbani, J., Airey, D. and El‑Zein, A., 2018. Numerical framework for SWCC dependency on volume changes and hysteresis. CMAME, 336, 80–110.',
+          'Ghorbani, J., Nazem, M. and Carter, J. P., 2020. Dynamic Compaction of Clays: Numerical Study Based on the Mechanics of Unsaturated Soils. International Journal of Geomechanics, 20(10).',
+          'Ghorbani, J. and Airey, D., 2019. Mechanism of dissipation of excess flow pressures in unsaturated granular soils subjected to seismic excitations. JGSSP, 7(2), 595–600.',
+          'Ghorbani, J. and Airey, D. W., 2019. Some aspects of numerical modelling of hydraulic hysteresis of unsaturated soils. In: Unsaturated Soils: Behavior, Mechanics and Conditions, 41–78.',
+          'Ghorbani, J., Nazem, M. and Carter, J. P., 2016. Dynamic analysis of unsaturated soils subjected to large deformations. Applied Mechanics and Materials, 846, 354–359.',
+          'Ghorbani, J., Nazem, M. and Carter, J. P., 2015. Numerical study of dynamic soil compaction at different degrees of saturation. ISOPE 2015.'
+        ],
+        contact: [
+          'Ghorbani, J. and Kodikara, J., 2021. Elastoplastic indentation of unsaturated soils using a rigid cylinder. Coupled Problems 2021.',
+          'Ghorbani, J., Nazem, M., Kodikara, J. and Wriggers, P., 2021. Finite element solution for static and dynamic interactions of cylindrical rigid objects and unsaturated granular soils. CMAME, 384, 113974.',
+          'Ghorbani, J., Chen, L., Kodikara, J., Carter, J. P. and McCartney, J. S., 2022. Memory repositioning in soil plasticity models used in contact problems. Computational Mechanics, 71(3), 385–408.',
+          'Ghorbani, J., Chen, L., Kodikara, J., Carter, J. P. and McCartney, J. S., 2022. Improving efficiency, stability, and accuracy of FEM for dynamic contact problems involving unsaturated soils. In: Challenges and Innovations in Geomechanics, LNCE 288, 177–184.'
+        ],
+        multiphysics: [
+          'Ghorbani, J., Nazem, M. and Carter, J., 2016. Numerical modelling of multiphase flow in unsaturated deforming porous media. Computers and Geotechnics, 71, 195–206.',
+          'Ghorbani, J., Nazem, M. and Carter, J., 2015. Application of the generalised‑α method in dynamic analysis of partially saturated media. IACMAG 2014.',
+          'Ghorbani, J., El‑Zein, A. and Airey, D. W., 2020. Thermo‑elasto‑plastic analysis of geosynthetic clay liners exposed to thermal dehydration. Environmental Geotechnics, 7(8), 566–580.'
+        ],
+        ai: [
+          'Ghorbani, J. and Nazem, M., 2025. Toward automated formulation, calibration, and implementation of soil models: A generative computational AI framework for SANISAND plasticity. Computers and Geotechnics, 185, 107330.',
+          'Ghorbani, J., 2025. SANISAND Model C++ Implementation: A Critical State Constitutive Model for Sand. Repository: https://github.com/jghorbani2/SANISAND_rep',
+          'Ghorbani, J., Aghdasi, S., Nazem, M., McCartney, J. S. and Kodikara, J., 2024. Parameters in play: AlphaZero‑Inspired AI for autonomous parameter identification in soil constitutive and finite element models. Computers and Geotechnics, 174, 106657.',
+          'Ghorbani, J. and Kodikara, J., 2024. Real‑time inference of compacted soil properties using deflection tests. Computers and Geotechnics, 173, 106543.',
+          'Ghorbani, J., Aghdasi, S., Nazem, M., McCartney, J. S. and Kodikara, J., 2025. Augmented intelligence framework for real‑time ground assessment under significant uncertainty. Engineering with Computers, 1–22.',
+          'Ghorbani, J. and Kodikara, J., 2024. From Non‑destructive Testing to Ground Property Inference: Integration of AI and Unsaturated Soil Dynamics. ICTG 2024, 183–189.',
+          'Ghorbani, J., Sounthararajah, A., Dutta, T. T. and Kodikara, J., 2024. Modelling rapid non‑destructive test using light weight deflectometer on granular soils across different degrees of saturation. JRMGE, 16(7), 2732–2748.',
+          'Sivagnanasuntharam, S., Sounthararajah, A., Ghorbani, J., Bodin, D. and Kodikara, J., 2021. A state‑of‑the‑art review of compaction control test methods and intelligent compaction technology for asphalt pavements. Road Materials and Pavement Design, 24(1).',
+          'Chen, L., Ghorbani, J., Zhang, C., Dutta, T. and Kodikara, J., 2022. A constitutive modelling approach towards performance‑based intelligent compaction. ISIC 2022.'
+        ]
+      };
+      const OVERLAY = document.getElementById('pubsOverlay');
+      const BODY = document.getElementById('pubsBody');
+      const TITLE = document.getElementById('pubsTitle');
+      const CLOSE = document.getElementById('pubsClose');
+      function openOverlay(cat){
+        const items = (DATA[cat]||[]).map(s=>`<div class="entry">${s}</div>`).join('');
+        BODY.innerHTML = items || '<div class="entry" style="color:#a9b8d6;">No entries yet.</div>';
+        TITLE.textContent = ({
+          multiphysics:'Multiphysics & Fully Coupled',
+          unsaturated:'Unsaturated Soils',
+          contact:'Contact Mechanics',
+          constitutive:'Constitutive Modeling',
+          ai:'AI‑Assisted Modelling & NDT'
+        })[cat] || 'Publications';
+        OVERLAY.classList.add('active');
+        OVERLAY.setAttribute('aria-hidden','false');
+        try{ CLOSE.focus(); }catch(_){}
+      }
+      function closeOverlay(){ OVERLAY.classList.remove('active'); OVERLAY.setAttribute('aria-hidden','true'); BODY.innerHTML=''; }
+      document.querySelector('.pubs-overlay .scrim').addEventListener('click', closeOverlay);
+      CLOSE.addEventListener('click', closeOverlay);
+      document.querySelectorAll('button.btn[data-cat]').forEach(btn=>{
+        btn.addEventListener('click', function(){
+          const cat = this.getAttribute('data-cat');
+          openOverlay(cat);
+        });
+      });
+      document.addEventListener('keydown', e=>{ if (e.key==='Escape' && OVERLAY.classList.contains('active')) closeOverlay(); });
+    })();
+  </script>
+</body>
+</html>
+
+

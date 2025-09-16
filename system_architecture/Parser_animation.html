@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Spider — Smart Text-to-Data Parser | Geotechnical Engineering AI</title>
+<meta name="description" content="Discover how Spider's intelligent parser converts field notes, lab reports, and engineering documents into standardized geotechnical parameters. Interactive visualization of text-to-data conversion for civil engineering professionals.">
+<meta name="keywords" content="geotechnical engineering, soil mechanics, text parsing, AI engineering, civil engineering software, geotechnical parameters, soil classification, engineering data extraction">
+<meta name="theme-color" content="#0b0f1a"/>
+<style>
+  :root{
+    --bg0:#0b0f1a; --bg1:#101a2f; --panel:#0f182c; --stroke:#263858;
+    --ink:#e8efff; --muted:#a9b8d6; --accent:#9fb3ff; --good:#8ef5c0; --wire:#5aa9ff;
+    --success:#4ade80; --warning:#fbbf24; --error:#ef4444; --info:#60a5fa;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:radial-gradient(1200px 800px at 50% 15%, var(--bg1) 0%, var(--bg0) 55%, #090e18 100%); color:var(--ink); font:14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial; overflow:hidden}
+  .layout{display:grid; grid-template-columns: 1fr 400px; gap:12px; height:100%}
+  .stage{position:relative}
+  svg{display:block; width:100%; height:100%}
+
+  .panel{
+    background:rgba(15,22,36,.94); border:1px solid var(--stroke); border-radius:14px;
+    box-shadow:0 10px 40px rgba(0,0,0,.5); margin:12px 12px 12px 0; padding:14px; overflow:auto;
+  }
+  .panel h1{margin:0 0 6px; font:700 18px/1.2 ui-sans-serif}
+  .panel p{margin:0 8px 8px 0; color:#cfe0ff}
+  .panel .micro{font-size:12px; color:var(--muted)}
+  .kvs{display:grid; grid-template-columns: auto 1fr; gap:6px 10px; font-size:13px}
+  .kvs span{color:#cfe0ff}
+  .kvs small{color:#9fb3d9}
+  details{margin-top:10px}
+  summary{cursor:pointer; font-weight:700}
+  table{width:100%; border-collapse:collapse; margin-top:8px; font-size:12px}
+  th,td{border:1px solid #2a3b5d; padding:6px 8px; vertical-align:top}
+  th{background:#16223a; color:#d6e3ff; position:sticky; top:0}
+  code{background:rgba(28,40,70,.6); padding:2px 4px; border-radius:5px}
+
+  .topbar{
+    position:absolute; z-index:5; left:12px; top:12px; right:412px;
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:rgba(12,18,32,.55); border:1px solid var(--stroke); border-radius:12px; padding:10px 12px; backdrop-filter:saturate(1.1) blur(6px)
+  }
+  .topbar h2{margin:0; font:700 15px/1.2 ui-sans-serif}
+  .topbar p{margin:0; color:#c6d5f3; font-size:13px}
+
+  /* SVG styling */
+  .node{cursor:pointer}
+  .chip text{font:700 12px ui-sans-serif, system-ui; fill:#eaf3ff}
+  .chip rect{fill:rgba(30,50,90,.85); stroke:#2e4574; stroke-width:1.5; transition: all 0.3s ease}
+  .chip:hover rect{stroke:#60a5fa; stroke-width:2; fill:rgba(30,50,90,.95)}
+  .chip.active rect{stroke:#7fb4ff; stroke-width:2.5; fill:rgba(59,130,246,.9)}
+  .chip text{transition: all 0.3s ease}
+  .chip:hover text{fill:#e0f2fe}
+  .chip.active text{fill:#ffffff; font-weight:700}
+  .ghost rect{fill:rgba(22,30,48,.35); stroke:#33496f; stroke-dasharray:4 6}
+  .ghost text{fill:#9db3db}
+
+  .parser circle.core{fill:url(#gParser); stroke:#2b3f66; stroke-width:2}
+  .parser text{font:700 12px ui-sans-serif, system-ui; fill:#09203b}
+
+  .wire{ fill:none; stroke:var(--wire); stroke-width:2.2; stroke-linecap:round; opacity:.9; stroke-dasharray:8 14; animation:dash 2.8s linear infinite; transition: all 0.3s ease }
+  .wire.active{ stroke-width:3.5; opacity:1; stroke:#60a5fa }
+  .wire.ghost{ stroke:#3b5179; opacity:.4; stroke-dasharray:2 10 }
+
+  .more-label{ font:700 12px ui-sans-serif, system-ui; fill:#9fb3ff }
+
+  /* Enhanced scale indicators */
+  .scale-counter{
+    position:absolute; top:20px; right:20px;
+    background:linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.9));
+    border:2px solid #3b82f6; border-radius:12px;
+    padding:12px 16px; backdrop-filter:blur(8px);
+    box-shadow:0 8px 32px rgba(0,0,0,0.3);
+    font-size:11px; text-align:center;
+    animation:pulse 3s ease-in-out infinite;
+  }
+  .scale-counter .number{
+    font:800 18px ui-sans-serif, system-ui;
+    background:linear-gradient(45deg, #60a5fa, #3b82f6);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    background-clip:text;
+  }
+  .scale-counter .label{ color:#9ca3af; margin-top:2px; }
+
+  .legend-panel{
+    position:absolute; bottom:20px; left:50%; transform:translateX(-50%);
+    background:linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.9));
+    border:1px solid #374151; border-radius:8px;
+    padding:8px 12px; backdrop-filter:blur(6px);
+    display:flex; align-items:center; gap:8px;
+    font-size:11px;
+  }
+  .legend-dot{
+    width:8px; height:8px; border-radius:50%;
+    background:#60a5fa; box-shadow:0 0 8px rgba(96,165,250,0.5);
+  }
+  .legend-dot.ghost{ background:#6b7280; box-shadow:0 0 8px rgba(107,114,128,0.3); }
+
+  .scale-rings{
+    animation:scalePulse 4s ease-in-out infinite;
+  }
+
+  .parameter-hint{
+    animation:floatHint 6s ease-in-out infinite;
+    pointer-events:none;
+  }
+
+  .chip.ghost{
+    animation:ghostPulse 3s ease-in-out infinite;
+    animation-delay: var(--delay, 0s);
+  }
+
+  @keyframes floatHint{
+    0%,100%{ transform:translateY(0px); opacity:0.4; }
+    50%{ transform:translateY(-3px); opacity:0.6; }
+  }
+
+  @keyframes ghostPulse{
+    0%,100%{ opacity:0.3; }
+    50%{ opacity:0.6; }
+  }
+
+  @keyframes pulse{
+    0%,100%{ transform:scale(1); opacity:0.9; }
+    50%{ transform:scale(1.05); opacity:1; }
+  }
+
+  @keyframes scalePulse{
+    0%,100%{ opacity:0.6; }
+    50%{ opacity:1; }
+  }
+
+  .feature-highlight{
+    background: linear-gradient(135deg, rgba(15,23,42,0.8), rgba(30,41,59,0.6));
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 16px;
+    margin: 16px 0;
+  }
+  .feature-highlight h3{
+    margin: 0 0 8px 0;
+    color: #60a5fa;
+    font-size: 16px;
+  }
+  .feature-highlight p{
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .example-section{ margin: 20px 0; }
+  .example-section h3{
+    margin: 0 0 12px 0;
+    color: #34d399;
+    font-size: 16px;
+  }
+  .example-box{
+    background: rgba(15,23,42,0.6);
+    border: 1px solid #374151;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 8px 0;
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  .example-box code{
+    background: rgba(55,65,81,0.5);
+    color: #10b981;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+
+  .table-note{
+    background: rgba(245,158,11,0.1);
+    border: 1px solid rgba(245,158,11,0.3);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+  }
+  .table-note p{
+    margin: 0;
+    color: #fbbf24;
+    font-weight: 600;
+  }
+
+  .benefit-section{ margin: 20px 0; }
+  .benefit-section h3{
+    margin: 0 0 12px 0;
+    color: #f59e0b;
+    font-size: 16px;
+  }
+  .benefit-section ul{
+    margin: 0;
+    padding-left: 20px;
+  }
+  .benefit-section li{
+    margin: 8px 0;
+    line-height: 1.5;
+  }
+  .benefit-section strong{
+    color: #60a5fa;
+  }
+
+  /* Loading overlay */
+  #loadingOverlay{
+    position:fixed; top:0; left:0; right:0; bottom:0;
+    background:radial-gradient(1200px 800px at 50% 15%, var(--bg1) 0%, var(--bg0) 55%, #090e18 100%);
+    z-index:10; display:flex; align-items:center; justify-content:center;
+    flex-direction:column; color:var(--ink); transition:opacity 0.5s ease;
+  }
+  #loadingOverlay.hidden{ opacity:0; pointer-events:none; }
+  #loadingProgress{
+    background:linear-gradient(90deg, var(--success), var(--info));
+    height:6px; width:0%; border-radius:3px; transition:width 0.3s ease;
+    margin:16px 0;
+  }
+
+  @keyframes dash { to{ stroke-dashoffset:-40 } }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 1024px){
+    .layout{grid-template-columns: 1fr}
+    .panel{position:absolute; right:12px; top:64px; width:min(92vw,420px); max-height:70vh}
+    .topbar{right:12px}
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="stage" id="stage">
+    <div class="topbar" role="region" aria-label="Smart text-to-data parser for geotechnical engineering">
+      <div>
+        <h2>Smart Text-to-Data Parser</h2>
+        <p>Click symbols or use arrow keys to explore. Press Tab for keyboard navigation. Esc to return.</p>
+      </div>
+    </div>
+    <svg id="board" viewBox="0 0 1200 700" aria-label="Parser Σ overview">
+      <defs>
+        <radialGradient id="gParser" cx="50%" cy="40%" r="60%">
+          <stop offset="0%" stop-color="#cde2ff"/>
+          <stop offset="100%" stop-color="#8fb7ff"/>
+        </radialGradient>
+
+        <!-- Scale visualization gradients -->
+        <radialGradient id="scaleGradient" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="rgba(96,165,250,0.1)"/>
+          <stop offset="50%" stop-color="rgba(96,165,250,0.05)"/>
+          <stop offset="100%" stop-color="rgba(96,165,250,0.01)"/>
+        </radialGradient>
+
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L8,3 L0,6 z" fill="#60a5fa" stroke="#3b82f6" stroke-width="0.5" opacity="0.9"/>
+        </marker>
+
+        <marker id="arrowGhost" markerWidth="6" markerHeight="4.5" refX="6" refY="2.25" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L6,2.25 L0,4.5 z" fill="#94a3b8" stroke="#64748b" stroke-width="0.3" opacity="0.4"/>
+        </marker>
+
+        <filter id="s" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000" flood-opacity=".35"/>
+        </filter>
+
+        <filter id="scaleGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+
+      <!-- Background scale visualization -->
+      <circle cx="600" cy="350" r="550" fill="url(#scaleGradient)" opacity="0.3" filter="url(#scaleGlow)"/>
+
+      <!-- central parser -->
+      <g class="parser" transform="translate(600,350)">
+        <circle class="core" r="70" filter="url(#s)"/>
+        <text x="0" y="-4" text-anchor="middle">ϕ_in — Parser</text>
+        <text x="0" y="14" text-anchor="middle">Universal geotechnical language</text>
+      </g>
+
+      <!-- containers for wires and chips -->
+      <g id="wires"></g>
+      <g id="chips"></g>
+      <g id="wiresGhost"></g>
+      <g id="chipsGhost"></g>
+
+      <!-- Enhanced scale indicators -->
+      <g class="scale-indicators">
+        <!-- Enhanced Parameter counter -->
+        <foreignObject x="850" y="20" width="200" height="100">
+          <div class="scale-counter" xmlns="http://www.w3.org/1999/xhtml">
+            <div class="number" id="paramCount">0</div>
+            <div class="label">Parameters Supported</div>
+            <div style="font-size:9px; color:#6b7280; margin-top:4px;">25 Interactive + 200+ Total</div>
+            <div style="font-size:8px; color:#9ca3af; margin-top:2px; line-height:1.2;">
+              Soil mechanics • Groundwater •<br>
+              Geotechnical analysis • Foundation design
+            </div>
+          </div>
+        </foreignObject>
+
+        <!-- Enhanced Legend -->
+        <foreignObject x="400" y="580" width="400" height="50">
+          <div class="legend-panel" xmlns="http://www.w3.org/1999/xhtml">
+            <div class="legend-dot"></div>
+            <span style="font-weight:600;">Interactive Parameters (25)</span>
+            <div class="legend-dot ghost"></div>
+            <span>Extended Support (200+)</span>
+            <span style="margin-left:8px; font-size:10px; color:#9ca3af;">
+              Click any parameter to learn more
+            </span>
+          </div>
+        </foreignObject>
+      </g>
+
+      <!-- Multiple ghost rings to show scale -->
+      <g class="scale-rings">
+        <!-- Second ghost ring -->
+        <circle cx="600" cy="350" r="380" fill="none" stroke="#3b5179" stroke-width="1" stroke-dasharray="5,10" opacity="0.3"/>
+        <!-- Third ghost ring -->
+        <circle cx="600" cy="350" r="450" fill="none" stroke="#2a3f5d" stroke-width="1" stroke-dasharray="3,8" opacity="0.2"/>
+        <!-- Fourth ghost ring (subtle) -->
+        <circle cx="600" cy="350" r="520" fill="none" stroke="#1f2937" stroke-width="1" stroke-dasharray="2,6" opacity="0.15"/>
+      </g>
+
+      <!-- Enhanced caption with more prominence -->
+      <text class="more-label" x="600" y="540" text-anchor="middle" font-size="14" font-weight="700">
+        Supporting 200+ engineering parameters across soil mechanics, groundwater, and geotechnical analysis
+      </text>
+    </svg>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay">
+    <div style="text-align:center; font:700 18px/1.2 ui-sans-serif; margin-bottom:8px">
+      Initializing Parser Engine
+    </div>
+    <div style="width:200px; height:6px; background:rgba(38,56,88,.3); border-radius:3px">
+      <div id="loadingProgress"></div>
+    </div>
+    <div style="margin:8px 0 0; font-size:14px; opacity:0.8" id="loadingText">
+      Loading parser components...
+    </div>
+  </div>
+
+  <aside class="panel" id="infoPanel" role="complementary" aria-live="polite">
+    <h1 id="pTitle">Smart Text-to-Data Conversion</h1>
+    <p id="pBody">
+      Imagine you're an engineer receiving field reports, lab results, or handwritten notes.
+      How do you quickly extract the important numbers and measurements?
+      <strong>Spider's intelligent parser</strong> does exactly this — it reads through any text and
+      automatically finds the engineering measurements you need.
+    </p>
+
+    <div class="feature-highlight">
+      <h3>🔍 How It Works</h3>
+      <p>The parser looks for specific patterns like "Gs = 2.65" or "moisture content = 15.2%"
+      and extracts these measurements. It also understands soil descriptions in plain English
+      and converts them into standard engineering classifications.</p>
+    </div>
+
+    <div class="kvs" id="pKvs">
+      <small>Key Measurements</small><span>Void ratio, specific gravity, density, moisture content, friction angle, soil type, and many more engineering parameters</span>
+      <small>Input Sources</small><span>Field notes, lab reports, sensor data, drawings, emails, and external APIs</span>
+      <small>Output Format</small><span>Standardized engineering symbols that all geotechnical software understands</span>
+    </div>
+
+    <div class="example-section">
+      <h3>📝 Real-World Examples</h3>
+      <div class="example-box">
+        <strong>Input:</strong> "The soil sample has Gs = 2.68 and void ratio e = 0.45"
+        <br><strong>Parser finds:</strong> <code>Gs=2.68</code> and <code>e=0.45</code>
+      </div>
+      <div class="example-box">
+        <strong>Input:</strong> "Well-graded sand with some gravel particles"
+        <br><strong>Parser converts:</strong> <code>soil_type=SW</code> (using USCS classification)
+      </div>
+    </div>
+
+    <details>
+      <summary>📊 Sample Conversion Examples (Not Complete List)</summary>
+      <div class="table-note">
+        <p><strong>Important:</strong> This table shows example conversions only. Spider supports hundreds of engineering parameters across soil mechanics, groundwater, and geotechnical engineering.</p>
+      </div>
+      <table role="table" aria-label="Example input-to-standard conversions">
+        <thead>
+          <tr>
+            <th>What You Might Type</th>
+            <th>Standard Symbol</th>
+            <th>What It Means</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>"Gs = 2.65"</td><td><code>Gs</code></td><td>Specific gravity (how heavy solids are compared to water)</td></tr>
+          <tr><td>"void ratio = 0.7"</td><td><code>e</code></td><td>Ratio of air/water space to solid particles</td></tr>
+          <tr><td>"dry density = 1.8 g/cm³"</td><td><code>rho_d</code></td><td>Density of dry soil material</td></tr>
+          <tr><td>"moisture = 12.5%"</td><td><code>w</code></td><td>Water content percentage</td></tr>
+          <tr><td>"friction angle = 32°"</td><td><code>phi</code></td><td>Soil's shear strength angle</td></tr>
+          <tr><td>"well-graded sand"</td><td><code>soil_type=SW</code></td><td>Soil classification using USCS system</td></tr>
+          <tr><td>"saturated soil"</td><td><code>S=100%</code></td><td>All pore spaces filled with water</td></tr>
+        </tbody>
+      </table>
+      <p class="micro">💡 <strong>Pro Tip:</strong> The parser is smart enough to handle variations like "Gs is 2.65" or "the specific gravity equals 2.65" in future updates.</p>
+    </details>
+
+    <div class="benefit-section">
+      <h3>🚀 Why This Matters</h3>
+      <ul>
+        <li><strong>Speed:</strong> Instantly extracts measurements from any text source</li>
+        <li><strong>Accuracy:</strong> Uses exact pattern matching to avoid errors</li>
+        <li><strong>Flexibility:</strong> Works with handwritten notes, digital reports, and live sensor data</li>
+        <li><strong>Standardization:</strong> Converts everything to industry-standard symbols</li>
+      </ul>
+    </div>
+
+    <p class="micro" id="pMicro">💡 <strong>Try it:</strong> Click any measurement symbol to learn more. Press Esc to return to the main page.</p>
+  </aside>
+</div>
+
+<script>
+(function(){
+  const board = document.getElementById('board');
+  const wires = document.getElementById('wires');
+  const chips = document.getElementById('chips');
+  const wiresGhost = document.getElementById('wiresGhost');
+  const chipsGhost = document.getElementById('chipsGhost');
+  const pTitle = document.getElementById('pTitle');
+  const pBody  = document.getElementById('pBody');
+  const pKvs   = document.getElementById('pKvs');
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  const loadingProgress = document.getElementById('loadingProgress');
+  const loadingText = document.getElementById('loadingText');
+
+  // Loading system
+  let loadingSteps = [
+    { text: 'Initializing parser engine...', progress: 20 },
+    { text: 'Loading parameter definitions...', progress: 40 },
+    { text: 'Building visualization components...', progress: 60 },
+    { text: 'Setting up interactions...', progress: 80 },
+    { text: 'Parser ready!', progress: 100 }
+  ];
+  let currentLoadingStep = 0;
+
+  function updateLoading(step) {
+    if (step < loadingSteps.length) {
+      loadingText.textContent = loadingSteps[step].text;
+      loadingProgress.style.width = loadingSteps[step].progress + '%';
+      currentLoadingStep = step;
+    }
+  }
+
+  function hideLoading() {
+    loadingOverlay.classList.add('hidden');
+    setTimeout(() => {
+      loadingOverlay.style.display = 'none';
+    }, 500);
+  }
+
+  updateLoading(0);
+
+  const center = {x:600, y:350};
+  const radius = 250;       // main ring radius (slightly larger)
+  const radiusGhost = 310;  // outer ghost ring radius
+
+  updateLoading(1);
+
+  // Enhanced canonical keys with detailed information and examples
+  const nodes = [
+    {
+      sym:'e',
+      chip:'e',
+      name:'Void Ratio',
+      desc:'The ratio of void volume to solid volume in soil. A measure of how much empty space exists between soil particles.',
+      category: 'Basic Properties',
+      example: 'e = 0.65',
+      importance: 'Critical for settlement calculations and soil classification',
+      seoKeywords: ['void ratio', 'soil voids', 'porosity ratio', 'soil structure']
+    },
+    {
+      sym:'Gs',
+      chip:'Gs',
+      name:'Specific Gravity',
+      desc:'The ratio of the density of soil solids to the density of water. Typically ranges from 2.60 to 2.80 for most soils.',
+      category: 'Basic Properties',
+      example: 'Gs = 2.68',
+      importance: 'Used in all density and void ratio calculations',
+      seoKeywords: ['specific gravity', 'soil density', 'relative density', 'particle density']
+    },
+    {
+      sym:'rho_d',
+      chip:'rho_d',
+      name:'Dry Density',
+      desc:'The mass of dry soil per unit volume. A key parameter for foundation design and earthwork calculations.',
+      category: 'Density Parameters',
+      example: 'rho_d = 1.65 g/cm³',
+      importance: 'Essential for structural engineering calculations',
+      seoKeywords: ['dry density', 'soil density', 'bulk density dry', 'unit weight dry']
+    },
+    {
+      sym:'w',
+      chip:'w',
+      name:'Moisture Content',
+      desc:'The amount of water present in soil expressed as a percentage of the dry weight. Critical for compaction and strength.',
+      category: 'Moisture Parameters',
+      example: 'w = 12.5%',
+      importance: 'Affects soil strength, compaction, and classification',
+      seoKeywords: ['moisture content', 'water content', 'gravimetric water content', 'soil moisture']
+    },
+    {
+      sym:'S',
+      chip:'S',
+      name:'Degree of Saturation',
+      desc:'The percentage of void space filled with water. Ranges from 0% (completely dry) to 100% (fully saturated).',
+      category: 'Saturation Parameters',
+      example: 'S = 85%',
+      importance: 'Critical for groundwater flow and soil behavior analysis',
+      seoKeywords: ['degree of saturation', 'soil saturation', 'water saturation', 'pore saturation']
+    },
+    {
+      sym:'n',
+      chip:'n',
+      name:'Porosity',
+      desc:'The fraction of the total soil volume that consists of void spaces (air and water).',
+      category: 'Basic Properties',
+      example: 'n = 0.42',
+      importance: 'Important for permeability and groundwater movement',
+      seoKeywords: ['soil porosity', 'void ratio', 'pore space', 'soil voids']
+    },
+    {
+      sym:'rho',
+      chip:'rho',
+      name:'Bulk Density',
+      desc:'The total mass of soil (solids + water) per unit volume. Includes both dry soil and pore water.',
+      category: 'Density Parameters',
+      example: 'rho = 1.95 g/cm³',
+      importance: 'Used in foundation design and earthwork quantity calculations',
+      seoKeywords: ['bulk density', 'total density', 'wet density', 'soil mass density']
+    },
+    {
+      sym:'phi',
+      chip:'phi',
+      name:'Friction Angle',
+      desc:'The angle of internal friction of soil, measured in degrees. Indicates soil\'s shear strength.',
+      category: 'Strength Parameters',
+      example: 'phi = 32°',
+      importance: 'Critical for slope stability and foundation design',
+      seoKeywords: ['friction angle', 'angle of repose', 'shear strength', 'internal friction']
+    },
+    {
+      sym:'max_dry_density',
+      chip:'max_dry_density',
+      name:'Maximum Dry Density',
+      desc:'The highest density that can be achieved by compacting soil at optimum moisture content (Standard Proctor test).',
+      category: 'Compaction Parameters',
+      example: 'max_dry_density = 1.85 g/cm³',
+      importance: 'Used for quality control in earthwork construction',
+      seoKeywords: ['maximum dry density', 'proctor density', 'optimum density', 'soil compaction']
+    },
+    {
+      sym:'gamma',
+      chip:'gamma',
+      name:'Bulk Unit Weight',
+      desc:'The weight of soil per unit volume, including the weight of water in the pores.',
+      category: 'Density Parameters',
+      example: 'gamma = 18.5 kN/m³',
+      importance: 'Essential for foundation design and stability calculations',
+      seoKeywords: ['unit weight', 'bulk unit weight', 'soil weight', 'specific weight']
+    },
+    {
+      sym:'suction',
+      chip:'suction',
+      name:'Matric Suction',
+      desc:'The negative pore-water pressure in unsaturated soil. A measure of how strongly water is held in soil pores.',
+      category: 'Unsaturated Soil Parameters',
+      example: 'suction = 50 kPa',
+      importance: 'Critical for slope stability in unsaturated soils',
+      seoKeywords: ['matric suction', 'soil suction', 'pore pressure negative', 'capillary pressure']
+    },
+    {
+      sym:'alpha_p_c',
+      chip:'alpha_p_c',
+      name:'Wetting/Drying Weight',
+      desc:'A weighting factor that blends wetting and drying soil-water characteristic curves.',
+      category: 'Advanced Parameters',
+      example: 'alpha_p_c = 0.3',
+      importance: 'Used in advanced unsaturated soil modeling',
+      seoKeywords: ['hysteresis weighting', 'soil water retention', 'wetting drying curve', 'unsaturated soil']
+    },
+    {
+      sym:'air_entry_at_ref_void_ratio_1.0',
+      chip:'air_entry@e=1.0',
+      name:'Air-Entry Value (Reference)',
+      desc:'The suction value at which air begins to enter the largest pores in soil, referenced to void ratio of 1.0.',
+      category: 'Advanced Parameters',
+      example: 'air_entry_at_ref_void_ratio_1.0 = 5 kPa',
+      importance: 'Used in permeability and drainage calculations',
+      seoKeywords: ['air entry value', 'bubble pressure', 'soil drainage', 'pore size distribution']
+    },
+    {
+      sym:'vg_n',
+      chip:'vg_n',
+      name:'Van Genuchten n (Drying)',
+      desc:'Shape parameter for the drying soil-water characteristic curve in the Van Genuchten model.',
+      category: 'Advanced Parameters',
+      example: 'vg_n = 1.35',
+      importance: 'Used in unsaturated soil water flow modeling',
+      seoKeywords: ['van genuchten model', 'soil water retention curve', 'unsaturated flow', 'soil hydraulic properties']
+    },
+    {
+      sym:'vg_m',
+      chip:'vg_m',
+      name:'Van Genuchten m (Drying)',
+      desc:'Shape parameter for the drying soil-water characteristic curve (typically m = 1-1/n).',
+      category: 'Advanced Parameters',
+      example: 'vg_m = 0.26',
+      importance: 'Used in unsaturated soil water flow modeling',
+      seoKeywords: ['van genuchten parameter', 'soil water retention', 'hydraulic conductivity', 'soil physics']
+    },
+    {
+      sym:'vg_n_w',
+      chip:'vg_n_w',
+      name:'Van Genuchten n (Wetting)',
+      desc:'Shape parameter for the wetting soil-water characteristic curve in the Van Genuchten model.',
+      category: 'Advanced Parameters',
+      example: 'vg_n_w = 1.42',
+      importance: 'Used in hysteresis modeling of soil water retention',
+      seoKeywords: ['van genuchten wetting', 'soil hysteresis', 'water retention hysteresis', 'unsaturated soil']
+    },
+    {
+      sym:'vg_m_w',
+      chip:'vg_m_w',
+      name:'Van Genuchten m (Wetting)',
+      desc:'Shape parameter for the wetting soil-water characteristic curve.',
+      category: 'Advanced Parameters',
+      example: 'vg_m_w = 0.30',
+      importance: 'Used in hysteresis modeling of soil water retention',
+      seoKeywords: ['van genuchten wetting parameter', 'soil hysteresis model', 'water retention curve', 'soil moisture']
+    },
+    {
+      sym:'Sw_max',
+      chip:'Sw_max',
+      name:'Maximum Saturation',
+      desc:'The upper bound of degree of saturation, accounting for residual air trapped in soil pores.',
+      category: 'Saturation Parameters',
+      example: 'Sw_max = 0.98',
+      importance: 'Used in advanced unsaturated soil modeling',
+      seoKeywords: ['maximum saturation', 'residual air', 'soil saturation limit', 'pore air content']
+    },
+    {
+      sym:'Sw_min',
+      chip:'Sw_min',
+      name:'Minimum Saturation',
+      desc:'The lower bound of degree of saturation, representing irreducible water content.',
+      category: 'Saturation Parameters',
+      example: 'Sw_min = 0.02',
+      importance: 'Used in drainage and permeability calculations',
+      seoKeywords: ['minimum saturation', 'irreducible water', 'residual saturation', 'soil drainage']
+    },
+    {
+      sym:'omega_prime',
+      chip:'omega_prime',
+      name:'Void-Sensitivity Exponent',
+      desc:'Parameter describing how the soil-water characteristic curve shifts with changes in void ratio.',
+      category: 'Advanced Parameters',
+      example: 'omega_prime = 0.55',
+      importance: 'Used in consolidation and settlement analysis of unsaturated soils',
+      seoKeywords: ['void sensitivity', 'soil compressibility', 'unsaturated consolidation', 'soil deformation']
+    },
+    {
+      sym:'Se',
+      chip:'Se',
+      name:'Effective Saturation',
+      desc:'Normalized degree of saturation between residual and saturated conditions.',
+      category: 'Saturation Parameters',
+      example: 'Se = 0.75',
+      importance: 'Used in unsaturated soil property correlations',
+      seoKeywords: ['effective saturation', 'normalized saturation', 'soil water content', 'relative saturation']
+    },
+    {
+      sym:'OMC',
+      chip:'OMC',
+      name:'Optimum Moisture Content',
+      desc:'The moisture content at which soil achieves maximum dry density in compaction tests.',
+      category: 'Compaction Parameters',
+      example: 'OMC = 14.2%',
+      importance: 'Critical for earthwork construction quality control',
+      seoKeywords: ['optimum moisture content', 'compaction moisture', 'proctor optimum', 'soil compaction']
+    },
+    {
+      sym:'moisture_condition',
+      chip:'moisture_condition',
+      name:'Moisture Condition',
+      desc:'Categorical description of soil moisture state (dry, moist, wet, saturated).',
+      category: 'Descriptive Parameters',
+      example: 'moisture_condition = "moist"',
+      importance: 'Used for qualitative soil classification and field logging',
+      seoKeywords: ['moisture condition', 'soil moisture state', 'field moisture', 'soil wetness']
+    },
+    {
+      sym:'soil_type',
+      chip:'soil_type',
+      name:'Soil Type (USCS)',
+      desc:'Soil classification according to the Unified Soil Classification System (e.g., GW, SW, CL, ML).',
+      category: 'Classification Parameters',
+      example: 'soil_type = "SW"',
+      importance: 'Standard soil classification used worldwide in geotechnical engineering',
+      seoKeywords: ['soil classification', 'USCS', 'unified soil classification', 'soil type', 'geotechnical classification']
+    }
+  ];
+
+  updateLoading(2);
+
+  // Build chips + wires in a ring
+  nodes.forEach((n, i)=>{
+    const a = (i / nodes.length) * Math.PI*2 - Math.PI/2; // start top
+    const x = center.x + Math.cos(a) * radius;
+    const y = center.y + Math.sin(a) * radius;
+
+    // wire
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', `M ${x},${y} L ${center.x},${center.y}`);
+    path.setAttribute('class','wire');
+    path.setAttribute('marker-end','url(#arrow)');
+    wires.appendChild(path);
+
+    // chip
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('class','chip node');
+    g.setAttribute('transform', `translate(${x},${y})`);
+    g.setAttribute('tabindex','0');
+    g.setAttribute('role','button');
+    g.setAttribute('aria-label', `${n.sym} — ${n.name}`);
+
+    // chip width: clamp to keep ring tidy
+    const textStr = n.chip || n.sym;
+    const maxW = 92; // px
+    let w = Math.max(56, 14 + textStr.length * 9);
+    if (w > maxW) w = maxW;
+
+    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x', -w/2); rect.setAttribute('y', -14);
+    rect.setAttribute('width', w); rect.setAttribute('height', 28);
+    rect.setAttribute('rx', 10); rect.setAttribute('ry', 10);
+
+    const text = document.createElementNS('http://www.w3.org/2000/svg','text');
+    text.setAttribute('x', 0); text.setAttribute('y', 4);
+    text.setAttribute('text-anchor','middle');
+    if ((n.chip||n.sym).length > 12){ text.setAttribute('font-size','11'); }
+    text.textContent = textStr;
+
+    // tooltip with full canonical key
+    const title = document.createElementNS('http://www.w3.org/2000/svg','title');
+    title.textContent = n.sym;
+    g.appendChild(title);
+
+    g.appendChild(rect); g.appendChild(text); chips.appendChild(g);
+
+    updateLoading(3);
+
+    const activate = ()=>{
+      // clear others
+      chips.querySelectorAll('.chip').forEach(el=>el.classList.remove('active'));
+      wires.querySelectorAll('.wire').forEach(el=>el.classList.remove('active'));
+      g.classList.add('active'); path.classList.add('active');
+
+      // Enhanced information display
+      document.getElementById('pTitle').textContent = `${n.sym} — ${n.name}`;
+      document.getElementById('pBody').innerHTML = `
+        <div style="margin-bottom: 16px;">
+          <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 20px; padding: 4px 12px; margin-bottom: 12px;">
+            <span style="font-size: 12px; color: #60a5fa; font-weight: 600;">${n.category}</span>
+          </div>
+          <p style="margin: 0; line-height: 1.6;">${n.desc}</p>
+        </div>
+        <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+          <strong style="color: #16a34a;">💡 Why This Matters:</strong> ${n.importance}
+        </div>
+      `;
+
+      document.getElementById('pKvs').innerHTML = `
+        <div style="display: grid; gap: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <small style="color: #9fb3d9;">Example Usage</small>
+            <span style="background: rgba(55, 65, 81, 0.5); color: #10b981; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size: 13px;">${n.example}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <small style="color: #9fb3d9;">Search Terms</small>
+            <span style="background: rgba(59, 130, 246, 0.1); color: #60a5fa; padding: 4px 8px; border-radius: 4px; font-size: 12px;">${n.seoKeywords.slice(0, 3).join(', ')}</span>
+          </div>
+        </div>
+      `;
+
+      // Add smooth animation to the panel
+      const panel = document.getElementById('infoPanel');
+      panel.style.animation = 'none';
+      setTimeout(() => {
+        panel.style.animation = 'fadeIn 0.3s ease-out';
+      }, 10);
+    };
+
+    g.addEventListener('click', activate);
+    g.addEventListener('keydown', (ev)=>{ if (ev.key==='Enter' || ev.key===' ') activate(); });
+  });
+
+  // Enhanced multi-ring ghost system to show massive scale
+  const createGhostRing = (radius, count, opacity, delay = 0) => {
+    for (let i = 0; i < count; i++) {
+      // Add some randomness to make it look more organic
+      const a = (i / count) * Math.PI * 2 - Math.PI/2 + (Math.random() - 0.5) * 0.3;
+      const x = center.x + Math.cos(a) * radius;
+      const y = center.y + Math.sin(a) * radius;
+
+      // Ghost wire
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', `M ${x},${y} L ${center.x},${center.y}`);
+    path.setAttribute('class','wire ghost');
+      path.setAttribute('marker-end','url(#arrowGhost)');
+      path.style.opacity = opacity;
+      path.style.animationDelay = `${delay + Math.random() * 2}s`;
+    wiresGhost.appendChild(path);
+
+      // Ghost chip
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('class','chip ghost');
+    g.setAttribute('transform', `translate(${x},${y})`);
+      g.style.opacity = opacity;
+      g.style.setProperty('--delay', `${delay + Math.random() * 2}s`);
+
+    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      rect.setAttribute('x', -20); rect.setAttribute('y', -10);
+      rect.setAttribute('width', 40); rect.setAttribute('height', 20);
+      rect.setAttribute('rx', 8); rect.setAttribute('ry', 8);
+
+    const text = document.createElementNS('http://www.w3.org/2000/svg','text');
+      text.setAttribute('x', 0); text.setAttribute('y', 3);
+    text.setAttribute('text-anchor','middle');
+      text.setAttribute('font-size','10');
+
+      // Varied ghost chip content
+      const ghostSymbols = ['φ', 'c', 'γ', 'ρ', 'k', 'n', 'S', 'e', 'Gs', 'w', '…'];
+      text.textContent = ghostSymbols[Math.floor(Math.random() * ghostSymbols.length)];
+
+    g.appendChild(rect); g.appendChild(text); chipsGhost.appendChild(g);
+  }
+  };
+
+  // Create multiple ghost rings to show massive scale
+  createGhostRing(320, 24, 0.4, 0);    // Inner ghost ring - 24 chips
+  createGhostRing(380, 32, 0.3, 0.5);  // Middle ghost ring - 32 chips
+  createGhostRing(440, 40, 0.2, 1.0);  // Outer ghost ring - 40 chips
+  createGhostRing(500, 48, 0.15, 1.5); // Far outer ring - 48 chips
+
+  // Add some floating parameter hints
+  const parameterHints = [
+    'Soil Permeability', 'Consolidation Parameters', 'Shear Strength',
+    'Thermal Properties', 'Chemical Analysis', 'Dynamic Properties',
+    'Foundation Design', 'Slope Stability', 'Earthquake Engineering'
+  ];
+
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2 + Math.PI/4;
+    const radius = 280 + Math.random() * 200;
+    const x = center.x + Math.cos(angle) * radius;
+    const y = center.y + Math.sin(angle) * radius;
+
+    const hint = document.createElementNS('http://www.w3.org/2000/svg','text');
+    hint.setAttribute('x', x);
+    hint.setAttribute('y', y);
+    hint.setAttribute('text-anchor','middle');
+    hint.setAttribute('class','parameter-hint');
+    hint.setAttribute('font-size','9');
+    hint.setAttribute('fill','#6b7280');
+    hint.setAttribute('opacity','0.4');
+    hint.textContent = parameterHints[i % parameterHints.length];
+
+    document.getElementById('chipsGhost').appendChild(hint);
+  }
+
+  // Enhanced Accessibility and Keyboard Navigation
+  let currentFocusIndex = -1;
+  const focusableChips = document.querySelectorAll('.chip.node');
+
+  // Announce changes to screen readers
+  function announceToScreenReader(message) {
+    const announcement = document.createElement('div');
+    announcement.setAttribute('aria-live', 'polite');
+    announcement.setAttribute('aria-atomic', 'true');
+    announcement.style.position = 'absolute';
+    announcement.style.left = '-10000px';
+    announcement.style.width = '1px';
+    announcement.style.height = '1px';
+    announcement.style.overflow = 'hidden';
+    announcement.textContent = message;
+    document.body.appendChild(announcement);
+    setTimeout(() => document.body.removeChild(announcement), 1000);
+  }
+
+  // Enhanced keyboard navigation
+  document.addEventListener('keydown', (e)=>{
+    if (e.key === 'Escape'){
+      try{ window.parent.postMessage({source:'spider-anim', cmd:'exit'}, '*'); }catch(_){/* noop */}
+      announceToScreenReader('Exiting parser visualization');
+      return;
+    }
+
+    // Focus management for chips
+    if (e.key === 'Tab' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      currentFocusIndex = (currentFocusIndex + 1) % focusableChips.length;
+      const chip = focusableChips[currentFocusIndex];
+      chip.focus();
+      announceToScreenReader(`Focused on ${chip.getAttribute('aria-label')}`);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      currentFocusIndex = currentFocusIndex <= 0 ? focusableChips.length - 1 : currentFocusIndex - 1;
+      const chip = focusableChips[currentFocusIndex];
+      chip.focus();
+      announceToScreenReader(`Focused on ${chip.getAttribute('aria-label')}`);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      currentFocusIndex = 0;
+      focusableChips[0].focus();
+      announceToScreenReader(`Focused on ${focusableChips[0].getAttribute('aria-label')}`);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      currentFocusIndex = focusableChips.length - 1;
+      const chip = focusableChips[currentFocusIndex];
+      chip.focus();
+      announceToScreenReader(`Focused on ${chip.getAttribute('aria-label')}`);
+    }
+  });
+
+  // Add focus event listeners to chips
+  focusableChips.forEach((chip, index) => {
+    chip.addEventListener('focus', () => {
+      currentFocusIndex = index;
+      // Trigger the same activation as click
+      const event = new MouseEvent('click', { bubbles: true });
+      chip.dispatchEvent(event);
+    });
+
+    chip.addEventListener('blur', () => {
+      // Optional: could add blur effects here
+    });
+  });
+
+  // Add ARIA attributes to main elements
+  board.setAttribute('role', 'application');
+  board.setAttribute('aria-label', 'Interactive parser visualization showing geotechnical parameters');
+  document.getElementById('infoPanel').setAttribute('aria-live', 'polite');
+
+  // Focus management
+  document.addEventListener('DOMContentLoaded', () => {
+    // Make sure the board is focusable
+    board.setAttribute('tabindex', '0');
+    board.addEventListener('focus', () => {
+      announceToScreenReader('Parser visualization focused. Use arrow keys to navigate parameters, Enter to select, Tab to move focus.');
+    });
+  });
+
+  updateLoading(4);
+  hideLoading();
+
+  // Animate parameter counter
+  const animateCounter = (element, target, duration = 2000) => {
+    const start = 0;
+    const startTime = performance.now();
+
+    const updateCounter = (currentTime) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Easing function for smooth animation
+      const easeOutCubic = 1 - Math.pow(1 - progress, 3);
+      const current = Math.floor(start + (target - start) * easeOutCubic);
+
+      element.textContent = current.toLocaleString();
+
+      if (progress < 1) {
+        requestAnimationFrame(updateCounter);
+      } else {
+        element.textContent = target.toLocaleString() + '+';
+      }
+    };
+
+    requestAnimationFrame(updateCounter);
+  };
+
+  // Start counter animation after a short delay
+  setTimeout(() => {
+    const counterElement = document.getElementById('paramCount');
+    if (counterElement) {
+      animateCounter(counterElement, 225, 3000);
+    }
+  }, 1500);
+
+})();
+</script>
+</body>
+</html>

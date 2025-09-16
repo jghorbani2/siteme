@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Spider — System Deep‑Dive: SPIDER Engine at Work</title>
+<meta name="theme-color" content="#0b0f1a" />
+
+<!-- Enhanced SEO -->
+<link rel="canonical" href="https://example.org/geotechnical-ai" />
+<meta name="description" content="SPIDER Engine Deep-Dive: Watch how Spider ingests any geotechnical data, translates it to Σ symbol set, selects optimal providers, and delivers auditable results." />
+<meta property="og:title" content="Spider — System Deep‑Dive: SPIDER Engine at Work"/>
+<meta property="og:description" content="Interactive animation showing how the SPIDER engine ingests anything, translates to Σ symbol set, chooses best providers, and explains results"/>
+<meta property="og:type" content="website"/>
+
+<link rel="stylesheet" href="../assets/style.css" />
+<style>
+  :root{
+    --bg0:#0b0f1a; --bg1:#0e1628; --panel:#0f182c; --stroke:#253552;
+    --ink:#e7efff; --muted:#9eb0d7; --accent:#60a5fa;
+    --blue:#6aacff; --mint:#8ef5c0; --amber:#ffd66b; --purple:#b49cff;
+    --card:rgba(18,26,44,.9); --edge:#2a3b5d;
+    --success:#10b981; --warning:#f59e0b; --error:#ef4444;
+  }
+  html,body{height:100%;margin:0}
+  body{
+    background: radial-gradient(1200px 800px at 50% 20%, var(--bg1) 0%, var(--bg0) 55%, #090e18 100%);
+    color:var(--ink);
+    font:14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial;
+    overflow:auto;
+  }
+
+  .intro{
+    position:fixed; left:16px; right:16px; top:12px; z-index:7;
+    display:flex; gap:14px; align-items:center; justify-content:space-between;
+    background:rgba(12,18,32,.85); border:1px solid var(--stroke); border-radius:14px;
+    padding:12px 16px; backdrop-filter:saturate(1.1) blur(8px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+  .intro h1{ margin:0; font:700 18px/1.2 ui-sans-serif; letter-spacing:.2px; background: linear-gradient(135deg, var(--blue), var(--mint)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .intro p { margin:4px 0 0; color:#c6d5f3; font-size:13px; opacity:.95 }
+  .intro .badge { background: linear-gradient(135deg, var(--purple), var(--amber)); color: var(--bg0); padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+
+
+
+  /* Enhanced summary block */
+  #summary{
+    position:relative; z-index:1; margin:16px auto; padding:16px 18px;
+    background:var(--card); border:1px solid var(--edge); border-radius:16px;
+    backdrop-filter:saturate(1.05) blur(8px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+  }
+  #summary h2{ margin:2px 0 12px; font:800 16px/1.2 ui-sans-serif; color: var(--accent); }
+  #summary p{ margin:6px 0; color:#dbe7ff; font-size: 14px; line-height: 1.5; }
+  #summary .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; margin-top:12px }
+  #summary .item{ background: linear-gradient(135deg, rgba(23,35,60,.8), rgba(30,45,75,.6)); border:1px solid rgba(60,90,140,.4); border-radius:12px; padding:12px 14px; transition: all 0.3s ease; position: relative; overflow: hidden; }
+  #summary .item:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+  #summary .item::before { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent); transition: left 0.5s; }
+  #summary .item:hover::before { left: 100%; }
+  #summary .item strong{ font-weight:800; color: var(--mint); }
+  #sumClose{
+    position:absolute; top:8px; right:8px; z-index:10;
+    border:1px solid var(--edge); border-radius:10px; background: linear-gradient(135deg, rgba(20,32,56,.9), rgba(15,25,45,.8)); color:#cfe0ff;
+    padding:8px 12px; font:700 12px ui-sans-serif; cursor:pointer; transition: all 0.3s ease;
+  }
+  #sumClose:hover{ transform: scale(1.05); box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+
+  /* Enhanced overlay */
+  #overlay{ position:fixed; inset:0; z-index:10000; display:none; align-items:stretch; justify-content:center; }
+  #overlay.active{ display:flex }
+  #overlay .scrim{ position:absolute; inset:0; background:rgba(6,10,18,0.85); backdrop-filter: blur(8px) saturate(1.05); }
+  #overlay .frame{ position:relative; z-index:1000; width:100%; height:100%; border-radius: 16px; overflow: hidden; box-shadow: 0 25px 80px rgba(0,0,0,0.5); }
+  #ovClose{ position:fixed; right:24px; top:24px; z-index:1001; border:1px solid var(--stroke); background: linear-gradient(135deg, rgba(16,24,40,.9), rgba(20,30,50,.8)); color:#cfe0ff; border-radius:12px; padding:8px 12px; cursor:pointer; font:700 14px/1 ui-sans-serif; transition: all 0.3s ease; }
+  #ovClose:hover { transform: scale(1.05); box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+  #ovFrame{ position:absolute; inset:0; width:100%; height:100%; border:0; background:transparent }
+
+  /* Enhanced SVG canvas */
+  .svg-wrap{ position:relative; height:72vh; border:1px solid var(--edge); border-radius:14px; overflow:hidden; background: radial-gradient(1200px 800px at 50% 20%, rgba(14,22,40,0.4) 0%, transparent 60%); margin:16px 0; }
+  svg{ position:relative; width:100%; height:100%; display:block; z-index:0 }
+  .label{ fill:#e7eefc; font:700 14px ui-sans-serif; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+  .sub{ fill:#a9b7d1; font:600 12px ui-sans-serif }
+  .node{ cursor:pointer; transition: all 0.3s ease; }
+  .node:hover { filter: brightness(1.1) drop-shadow(0 0 8px rgba(106,174,255,0.3)); }
+
+  /* Professional inference engine container */
+  .engine-box{
+    fill: linear-gradient(135deg, rgba(18,26,44,.95), rgba(30,45,75,.9), rgba(20,35,60,.8));
+    stroke: linear-gradient(135deg, #60a5fa, #3b82f6);
+    stroke-width: 2;
+    rx: 20;
+    ry: 20;
+    filter: url(#s);
+    box-shadow: 0 0 20px rgba(96,165,250,0.2);
+  }
+  .engine-box:hover {
+    stroke: linear-gradient(135deg, #3b82f6, #1e40af);
+    stroke-width: 3;
+    filter: url(#s) drop-shadow(0 0 15px rgba(96,165,250,0.4));
+  }
+
+  /* Enhanced Symbol Pool orb */
+  .orb .core{ fill:url(#orbGrad); filter: drop-shadow(0 0 20px rgba(106,174,255,0.4)); }
+  .orb .halo{ fill:none; stroke:#a7c9ff; stroke-opacity:.4; stroke-width:8; filter: blur(2px); }
+  .orbit{ transform-box: fill-box; transform-origin: 50% 50%; animation:spin 15s linear infinite }
+  .orbit.slow{ animation-duration:20s; opacity:.7 }
+  .orbit.fast{ animation-duration:10s; opacity:.9 }
+  .dot{ fill:#cfe3ff; filter: drop-shadow(0 0 4px rgba(106,174,255,0.6)); }
+  @keyframes spin { to{ transform:rotate(360deg) } }
+
+  /* Professional flow wires */
+  .wire{ fill:none; stroke:var(--blue); stroke-width:3; stroke-linecap:round; marker-end:url(#arrow); filter: drop-shadow(0 0 2px rgba(96,165,250,0.4)); }
+  .pulse{ stroke-dasharray:10 10; animation:flow 3s linear infinite }
+  .slow{ animation-duration:4.5s } .fast{ animation-duration:2.2s }
+  .wire.mint{ stroke:var(--mint) } .wire.amber{ stroke:var(--amber) }
+  @keyframes flow { to{ stroke-dashoffset:-20 } }
+
+  /* Professional chip styling */
+  .chip:hover rect {
+    stroke-width: 2;
+    filter: drop-shadow(0 0 8px rgba(96,165,250,0.3));
+  }
+  .chip:hover text {
+    fill: #ffffff;
+  }
+
+  /* Enhanced icon animations */
+  .floaty{ animation:floaty 4.0s ease-in-out infinite }
+  @keyframes floaty { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-4px) } }
+  .spinSlow{ transform-box: fill-box; transform-origin:50% 50%; animation:spin 12s linear infinite }
+  .blink{ animation:blink 2.0s ease-in-out infinite }
+  @keyframes blink { 0%,100%{ opacity:.6 } 50%{ opacity:1 } }
+
+  /* Enhanced parser scan */
+  .scan{ transform-box: fill-box; transform-origin:50% 50%; animation:scan 3.0s ease-in-out infinite }
+  @keyframes scan { 0%,100% { transform: translateX(-10px) } 50%{ transform: translateX(10px) } }
+
+  /* Data flow particles */
+  .particle{ fill: var(--accent); opacity: 0.8; animation: particleFlow 4s linear infinite; }
+  @keyframes particleFlow { 0% { opacity: 0; transform: scale(0.5); } 50% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(0.5); } }
+
+  /* Status indicators */
+  .status-indicator { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .status-active { background: rgba(16,185,129,.2); color: var(--success); border: 1px solid rgba(16,185,129,.3); }
+  .status-processing { background: rgba(245,158,11,.2); color: var(--warning); border: 1px solid rgba(245,158,11,.3); }
+
+  /* Prelude section (canvas before interactive) */
+  #prelude{ position: relative; z-index: 8; padding: 24px 0 16px; }
+  .prelude-canvas-wrap{ position:relative; height: 160px; border:1px solid var(--stroke); border-radius:14px; margin:0 0 12px; background: radial-gradient(800px 360px at 20% 40%, rgba(96,165,250,.12), transparent 60%), radial-gradient(700px 320px at 80% 30%, rgba(142,245,192,.10), transparent 65%); overflow:hidden }
+  #spiderPreludeBg{ position:absolute; inset:0; width:100%; height:100%; display:block }
+
+  @media (max-width:900px){
+    #summary .grid{ grid-template-columns:1fr }
+  }
+  @media (max-width:720px){
+    .intro{ flex-direction:column; align-items:stretch; gap:8px }
+    .svg-wrap{ height:64vh }
+  }
+</style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="site-header" role="banner" aria-label="Site header">
+    <div class="container header-inner">
+      <a class="brand" href="../index.html" aria-label="Home"><span>Javad Ghorbani</span></a>
+      <nav class="nav" aria-label="Primary">
+        <ul>
+          <li class="nav-dropdown">
+            <a href="../index.html#projects">Projects</a>
+            <div class="dropdown-menu">
+              <div class="dropdown-item has-sub">
+                <a href="../ai-projects.html">Artificial Intelligence</a>
+                <div class="dropdown-submenu">
+                  <a href="../ai-projects.html#overview">Overview</a>
+                  <a href="#ai-demo">Live Demo</a>
+                  <a href="#ai-code">Source Code</a>
+                  <a href="#ai-paper">Research Paper</a>
+                </div>
+              </div>
+              <div class="dropdown-item has-sub">
+                <a href="../geomechanics-projects.html">Computational Geomechanics</a>
+                <div class="dropdown-submenu">
+                  <a href="../geomechanics-projects.html#overview">Overview</a>
+                  <a href="#geomechanics-sim">Interactive Simulation</a>
+                  <a href="#geomechanics-docs">Documentation</a>
+                  <a href="#geomechanics-research">Research</a>
+                </div>
+              </div>
+            </div>
+          </li>
+          <li><a href="../index.html#about">About</a></li>
+          <li><a class="btn btn-sm" href="../index.html#contact-me">Contact</a></li>
+        </ul>
+      </nav>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="nav-drawer" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+    <div id="nav-drawer" class="nav-drawer" hidden>
+      <a href="../index.html#projects">Projects</a>
+      <div class="drawer-submenu">
+        <a href="../ai-projects.html">• Artificial Intelligence</a>
+        <a href="../geomechanics-projects.html">• Computational Geomechanics</a>
+      </div>
+      <a href="../index.html#about">About</a>
+      <a href="../index.html#contact-me" class="btn btn-sm">Contact</a>
+    </div>
+  </header>
+
+  <script>
+    (function(){
+      const btn = document.querySelector('.nav-toggle');
+      const drawer = document.getElementById('nav-drawer');
+      if (!btn || !drawer) return;
+      function open(){ drawer.hidden = false; btn.setAttribute('aria-expanded','true'); document.documentElement.style.overflow = 'hidden'; }
+      function close(){ drawer.hidden = true; btn.setAttribute('aria-expanded','false'); document.documentElement.style.overflow = ''; }
+      btn.addEventListener('click', () => drawer.hidden ? open() : close());
+      drawer.addEventListener('click', (e) => { if (e.target && e.target.tagName === 'A') close(); });
+      window.addEventListener('keydown', e => { if (e.key === 'Escape' && !drawer.hidden) close(); });
+    })();
+  </script>
+
+  <a class="back-fab" href="../ai-projects.html" aria-label="Back to Artificial Intelligence">← Back</a>
+
+  <script>
+    // SPIDER: publications & repositories toggle (init after DOM ready)
+    document.addEventListener('DOMContentLoaded', function(){
+      const btn = document.getElementById('spiderBtnRepos');
+      const list = document.getElementById('spiderRepoList');
+      const pubBtn = document.getElementById('spiderBtnPubs');
+      const pubList = document.getElementById('spiderPubList');
+      if (btn && list){
+        const repos = [
+          { title:'Autonomous Geotechnical Problem Solver and Planner', href:'https://github.com/jghorbani2/autonomous-geotechnical-problem-solver-and-planner' },
+          { title:'Network Plotter', href:'https://github.com/jghorbani2/networkplot' },
+          { title:'Dynamic Memory (SPIDER dynamic memory store)', href:'https://github.com/jghorbani2/Dynamic_memory' }
+        ];
+        const html = repos.map(r=>`<div style="margin:6px 0;"><a href="${r.href}" target="_blank" rel="noopener">${r.title}</a></div>`).join('');
+        btn.addEventListener('click', function(ev){
+          ev.preventDefault();
+          if (list.style.display === 'none'){ list.innerHTML = html; list.style.display = 'block'; }
+          else { list.style.display = 'none'; }
+        });
+      }
+      if (pubBtn && pubList){
+        const pubsHtml = [
+          'Publications will be listed here in Harvard style. (Placeholder)'
+        ].map(s=>`<div style="margin:6px 0;">${s}</div>`).join('');
+        pubBtn.addEventListener('click', function(ev){
+          ev.preventDefault();
+          if (pubList.style.display === 'none'){ pubList.innerHTML = pubsHtml; pubList.style.display = 'block'; }
+          else { pubList.style.display = 'none'; }
+        });
+      }
+    });
+  </script>
+
+  <section id="prelude" class="stripe" aria-label="SPIDER Overview">
+    <div class="container">
+      <header style="text-align:center; margin:0 0 10px;">
+        <h2 style="margin:0 0 6px; background: linear-gradient(135deg, var(--blue), var(--mint)); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;">SPIDER — Symbolic Planning and Inference</h2>
+        <h3 style="margin:10px 0 6px;">Abstract</h3>
+        <p class="lede" style="max-width:80ch; margin:0 auto;">SPIDER is a graph‑driven geotechnical intelligence engine that fuses symbolic inference with cost‑aware planning. Heterogeneous inputs are parsed with NLP and mapped onto a domain symbol set, then reasoned over a knowledge graph using uniform‑cost search. A PostgreSQL‑backed dynamic memory enables human–AI collaboration and explainable workflows; computation blends Python/SymPy for exact algebra, fuzzy logic for uncertainty handling, and reinforcement learning for policy refinement.</p>
+        <p class="micro" style="max-width:80ch; margin:8px auto 0; color:#a9b8d6;">Animation guide: Click nodes (Inputs, Parser/NLP, Dynamic Memory, Σ Pool, Registry, Reasoner, Output) to open deep‑dives. Pulsing wires indicate data flow; moving particles visualize token transfer. Use the × button or Esc to exit overlays.</p>
+        <h3 style="margin:12px 0 6px;">Publications & Repositories</h3>
+        <div class="btn-row" style="justify-content:center;">
+          <a id="spiderBtnPubs" class="btn" href="#">Publications</a>
+          <a id="spiderBtnRepos" class="btn btn-ghost" href="#">Repositories</a>
+        </div>
+        <div id="spiderPubList" class="card" style="display:none; margin-top:10px;"></div>
+        <div id="spiderRepoList" class="card" style="display:none; margin-top:10px;"></div>
+        <h3 style="margin:12px 0 6px;">Technologies</h3>
+        <div class="card-tags" style="justify-content:center;">
+          <span class="tag">PostgreSQL</span>
+          <span class="tag">NLP</span>
+          <span class="tag">SymPy</span>
+          <span class="tag">Reinforcement Learning</span>
+          <span class="tag">Human‑AI Collaboration</span>
+          <span class="tag">xAI</span>
+          <span class="tag">Python</span>
+          <span class="tag">Fuzzy Logic</span>
+          <span class="tag">Symbolic Inference</span>
+          <span class="tag">Knowledge Graph</span>
+          <span class="tag">Uniform‑Cost Search</span>
+        </div>
+      </header>
+    </div>
+  </section>
+
+<div class="intro" role="region" aria-label="Header" style="z-index:5;">
+  <div>
+    <p style="margin:0;">Interactive walkthrough of symbolic planning, inference, and explainable reasoning across the system.</p>
+    <p style="margin:2px 0 0; color:#a9b8d6; font-size:12px;">Tip: Nodes are clickable for deep‑dives • Press Esc to exit overlays.</p>
+  </div>
+  <div style="display:flex; align-items:center; gap:8px;">
+    <div class="badge">🕷️ SPIDER ENGINE</div>
+  </div>
+</div>
+
+
+
+<!-- System Deep-Dive Explanation -->
+<section id="summary" aria-label="SPIDER Engine Deep Dive">
+  <button id="sumClose" aria-label="Hide overview">×</button>
+  <h2>SPIDER — Abstract</h2>
+  <p>
+    SPIDER is a graph‑driven geotechnical intelligence engine that combines NLP‑based parsing, symbolic
+    inference with SymPy, and cost‑aware planning over a knowledge graph via uniform‑cost search. A
+    PostgreSQL‑backed dynamic memory supports human–AI collaboration and explainable AI, while fuzzy logic
+    and reinforcement learning refine decisions under uncertainty.
+  </p>
+  <div class="btn-row" style="justify-content:flex-start; display:none;">
+    <a class="btn" href="#" onclick="event.preventDefault(); alert('Publication placeholder');">Publication</a>
+    <a class="btn btn-ghost" href="#" onclick="event.preventDefault(); alert('Repository placeholder');">Repository</a>
+  </div>
+  <div class="grid" role="list">
+    <div class="item" role="listitem">
+      <strong>📥 Data Ingestion</strong><br>
+      Spider accepts any geotechnical input: lab results, sensor data, satellite imagery,
+      practitioner notes, documents, or external APIs.
+    </div>
+    <div class="item" role="listitem">
+      <strong>🔄 Translation to Σ</strong><br>
+      All inputs are normalized into Spider's shared geotechnical symbol set (Σ) -
+      a unified vocabulary for consistent reasoning.
+    </div>
+    <div class="item" role="listitem">
+      <strong>🎯 Provider Selection</strong><br>
+      The system intelligently selects the best combination of physics laws, empirical models,
+      and ML algorithms from its curated registry.
+    </div>
+    <div class="item" role="listitem">
+      <strong>📊 Auditable Results</strong><br>
+      Every decision includes full explanation: which providers were used, why they were chosen,
+      confidence levels, and complete audit trail.
+    </div>
+  </div>
+  <div style="margin-top: 16px; text-align: center;">
+    <span class="status-indicator status-active">🕷️ SPIDER Online</span>
+    <span class="status-indicator status-processing" style="margin-left: 8px;">⟳ Translating to Σ</span>
+  </div>
+</section>
+
+<!-- Overlay that hosts deep-dives -->
+<div id="overlay" aria-hidden="true" aria-label="Module Deep Dive Overlay">
+  <div class="scrim" tabindex="-1"></div>
+  <div class="frame">
+    <iframe id="ovFrame" title="Deep Dive"></iframe>
+  </div>
+  <button id="ovClose" aria-label="Close overlay and return">×</button>
+</div>
+
+<!-- ENHANCED PROFESSIONAL PIPELINE ANIMATION -->
+<div class="svg-wrap">
+<svg id="board" viewBox="0 0 1200 700" aria-label="Intelligent Geotechnical Pipeline" width="100%" height="100%">
+  <defs>
+    <filter id="s" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#000" flood-opacity=".4"/>
+    </filter>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Professional arrow marker -->
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 z" fill="#60a5fa" stroke="#3b82f6" stroke-width="0.5" filter="url(#glow)"/>
+    </marker>
+
+    <!-- Enhanced orb gradient -->
+    <radialGradient id="orbGrad" cx="50%" cy="45%" r="70%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="30%" stop-color="#cfe8ff"/>
+      <stop offset="70%" stop-color="#6aacff"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </radialGradient>
+
+    <!-- Data flow particle gradient -->
+    <radialGradient id="particleGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </radialGradient>
+
+    <!-- ======== ENHANCED PROFESSIONAL ICONS ======== -->
+
+    <!-- INPUTS: Enhanced multi-source data collection -->
+    <g id="icon-inputs-rich">
+      <!-- Professional document with data layers -->
+      <rect x="-45" y="-32" width="38" height="48" rx="8" fill="url(#particleGrad)" stroke="#4f46e5" stroke-width="2"/>
+      <rect x="-40" y="-20" width="28" height="5" rx="2.5" fill="#312e81"/>
+      <rect x="-40" y="-12" width="20" height="5" rx="2.5" fill="#4338ca"/>
+      <rect x="-40" y="-4" width="16" height="5" rx="2.5" fill="#4338ca"/>
+      <!-- Enhanced flask with measurement markers -->
+      <g class="floaty">
+        <path d="M-6,-28 v16 l-16,20 a12,12 0 0 0 10,18 h24 a12,12 0 0 0 10-18 l-16-20 v-16" fill="#0f172a" stroke="#06b6d4" stroke-width="2.5"/>
+        <path d="M-20,2 h40" stroke="#06b6d4" stroke-width="3.5"/>
+        <circle cx="-8" cy="8" r="2.5" fill="#67e8f9"/><circle cx="0" cy="10" r="2.5" fill="#67e8f9"/><circle cx="8" cy="7" r="2.5" fill="#67e8f9"/>
+        <!-- Measurement scale -->
+        <rect x="-24" y="-8" width="2" height="20" fill="#64748b"/>
+      </g>
+      <!-- Enhanced satellite with signal strength -->
+      <g transform="translate(42,-12)">
+        <path d="M0,0 a20,20 0 0 1 20,-20 l5,5 a25,25 0 0 0 -25,25z" fill="#7c3aed"/>
+        <rect x="-3" y="2" width="10" height="22" rx="3" fill="#581c87"/>
+        <path d="M5,-18 a18,18 0 0 1 12,12" fill="none" stroke="#a855f7" stroke-width="2.5" class="blink"/>
+        <path d="M7,-20 a22,22 0 0 1 14,14" fill="none" stroke="#a855f7" stroke-width="2.5" opacity=".7" class="blink"/>
+        <!-- Signal bars -->
+        <rect x="-8" y="6" width="2" height="4" fill="#a855f7"/><rect x="-5" y="4" width="2" height="6" fill="#a855f7"/><rect x="-2" y="2" width="2" height="8" fill="#a855f7"/>
+      </g>
+      <!-- Enhanced IoT sensor with data transmission -->
+      <g transform="translate(24,20)">
+        <circle r="4" fill="#ea580c"/>
+        <path d="M0,0 m-10,0 a10,10 0 0 1 20,0" fill="none" stroke="#f97316" stroke-width="2.5"/>
+        <path d="M0,0 m-14,0 a14,14 0 0 1 28,0" fill="none" stroke="#f97316" stroke-width="2.5" opacity=".7"/>
+        <!-- Data waves -->
+        <path d="M-16,-6 Q-8,-12 0,-6 Q8,-12 16,-6" fill="none" stroke="#fed7aa" stroke-width="2" opacity=".6"/>
+      </g>
+    </g>
+
+    <!-- PARSER: Enhanced AI-powered document analysis -->
+    <g id="icon-parser-extract">
+      <!-- Professional document with structured data -->
+      <rect x="-36" y="-30" width="64" height="24" rx="8" fill="#1e293b" stroke="#475569" stroke-width="2"/>
+      <rect x="-30" y="-26" width="40" height="4" rx="2" fill="#f1f5f9"/>
+      <rect x="-30" y="-20" width="28" height="4" rx="2" fill="#cbd5e1"/>
+      <rect x="-30" y="-14" width="20" height="4" rx="2" fill="#94a3b8"/>
+      <!-- AI analysis lens with processing indicators -->
+      <g class="scan" transform="translate(10,-8)">
+        <circle r="12" fill="none" stroke="#10b981" stroke-width="3" opacity=".8"/>
+        <circle r="8" fill="none" stroke="#34d399" stroke-width="2"/>
+        <rect x="11" y="8" width="14" height="5" rx="2.5" fill="#10b981"/>
+        <!-- Processing dots -->
+        <circle cx="0" cy="0" r="1.5" fill="#10b981" opacity=".6"><animate attributeName="opacity" values=".3;1;.3" dur="1.5s" repeatCount="indefinite"/></circle>
+      </g>
+      <!-- Enhanced data tokens with types -->
+      <circle cx="-10" cy="20" r="4.5" fill="#3b82f6" stroke="#1e40af" stroke-width="1"/>
+      <rect x="0" y="16" width="10" height="10" rx="3" fill="#10b981" stroke="#059669" stroke-width="1"/>
+      <path d="M18,16 l10,10 l-10,0 z" fill="#f59e0b" stroke="#d97706" stroke-width="1"/>
+      <!-- Data flow arrows -->
+      <path d="M-8,16 L-2,16" fill="none" stroke="#6b7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+    </g>
+
+    <!-- DYNAMIC MEMORY: Enhanced collaborative knowledge base -->
+    <g id="icon-dyn-collab">
+      <rect x="-52" y="-30" width="104" height="60" rx="14" fill="#0f172a" stroke="#334155" stroke-width="2"/>
+      <!-- Neural network visualization -->
+      <circle cx="-30" cy="-10" r="4" fill="#3b82f6" opacity=".8"/>
+      <circle cx="-10" cy="-15" r="4" fill="#10b981" opacity=".8"/>
+      <circle cx="10" cy="-10" r="4" fill="#f59e0b" opacity=".8"/>
+      <circle cx="30" cy="-15" r="4" fill="#ef4444" opacity=".8"/>
+      <!-- Connection lines -->
+      <path d="M-26,-10 Q-18,-12.5 -6,-15" fill="none" stroke="#6b7280" stroke-width="1.5" opacity=".6"/>
+      <path d="M-6,-11 Q2,-10.5 6,-10" fill="none" stroke="#6b7280" stroke-width="1.5" opacity=".6"/>
+      <path d="M14,-10 Q22,-12.5 26,-15" fill="none" stroke="#6b7280" stroke-width="1.5" opacity=".6"/>
+      <!-- Enhanced status indicators -->
+      <circle cx="-24" cy="-4" r="2.5" fill="#10b981"><animate attributeName="opacity" values=".5;1;.5" dur="2s" repeatCount="indefinite"/></circle>
+      <circle cx="24" cy="-4" r="2.5" fill="#3b82f6"><animate attributeName="opacity" values=".5;1;.5" dur="1.5s" repeatCount="indefinite"/></circle>
+      <circle cx="-30" cy="14" r="2.5" fill="#f59e0b"><animate attributeName="opacity" values=".5;1;.5" dur="2.5s" repeatCount="indefinite"/></circle>
+      <circle cx="26" cy="14" r="2.5" fill="#10b981"><animate attributeName="opacity" values=".5;1;.5" dur="1.8s" repeatCount="indefinite"/></circle>
+      <!-- Collaborative interface -->
+      <g transform="translate(38,-24)">
+        <circle r="8" cx="-10" cy="0" fill="#3b82f6" stroke="#1e40af" stroke-width="1.5"/>
+        <circle r="8" cx="10" cy="0" fill="#10b981" stroke="#059669" stroke-width="1.5"/>
+        <rect x="-12" y="10" width="24" height="12" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+        <path d="M-10,15 l5,4 l10,-10" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round"/>
+        <!-- Collaboration spark -->
+        <circle cx="0" cy="-12" r="1.5" fill="#fbbf24"><animate attributeName="opacity" values="0;1;0" dur="1s" repeatCount="indefinite"/></circle>
+      </g>
+    </g>
+
+    <!-- STATIC MEMORY / PROVIDER REGISTRY: Enhanced curated knowledge base -->
+    <g id="icon-static-reg">
+      <!-- Professional database visualization -->
+      <ellipse cx="0" cy="-20" rx="48" ry="14" fill="#1e293b" stroke="#475569" stroke-width="2"/>
+      <rect x="-48" y="-20" width="96" height="62" rx="16" fill="#0f172a" stroke="#334155" stroke-width="2"/>
+      <ellipse cx="0" cy="42" rx="48" ry="14" fill="#1e293b"/>
+      <!-- Enhanced documentation -->
+      <rect x="-20" y="-12" width="22" height="30" rx="4" fill="#3b82f6" stroke="#1e40af" stroke-width="1.5"/>
+      <rect x="6" y="-12" width="22" height="30" rx="4" fill="#10b981" stroke="#059669" stroke-width="1.5"/>
+      <rect x="-16" y="-6" width="14" height="3" fill="#dbeafe"/><rect x="10" y="-6" width="14" height="3" fill="#d1fae5"/>
+      <rect x="-16" y="0" width="10" height="3" fill="#bfdbfe"/><rect x="10" y="0" width="10" height="3" fill="#a7f3d0"/>
+      <!-- Cost optimization gear -->
+      <g class="spinSlow" transform="translate(36,4)">
+        <circle r="8" fill="#f59e0b" stroke="#d97706" stroke-width="1.5"/>
+        <g fill="#f59e0b">
+          <rect x="-1.5" y="-12" width="3" height="5"/><rect x="-1.5" y="7" width="3" height="5"/>
+          <rect x="-12" y="-1.5" width="5" height="3"/><rect x="7" y="-1.5" width="5" height="3"/>
+          <rect x="-9" y="-9" width="4" height="4" transform="rotate(45)"/>
+        </g>
+        <circle r="4" fill="#92400e"/>
+        <!-- Cost indicator -->
+        <text x="0" y="1" text-anchor="middle" font-family="system-ui" font-size="6" font-weight="bold" fill="#fbbf24">$</text>
+      </g>
+      <!-- Quality indicators -->
+      <circle cx="-32" cy="8" r="3" fill="#10b981"/>
+      <circle cx="-24" cy="8" r="3" fill="#10b981"/>
+      <circle cx="-16" cy="8" r="3" fill="#10b981"/>
+      <circle cx="32" cy="8" r="3" fill="#f59e0b"/>
+      <circle cx="24" cy="8" r="3" fill="#ef4444"/>
+    </g>
+
+    <!-- Professional Inference Engine Icon -->
+    <g id="icon-engine">
+      <!-- Outer glow ring -->
+      <circle r="16" fill="none" stroke="#60a5fa" stroke-width="0.5" opacity="0.3">
+        <animate attributeName="r" values="14;16;14" dur="3s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.2;0.4;0.2" dur="3s" repeatCount="indefinite"/>
+      </circle>
+
+      <!-- Main processing core -->
+      <circle r="12" fill="url(#engineGrad)" stroke="#3b82f6" stroke-width="1"/>
+      <circle r="10" fill="none" stroke="#1e40af" stroke-width="0.5" opacity="0.6"/>
+
+      <!-- Neural network nodes -->
+      <circle cx="-6" cy="-6" r="1.5" fill="#fbbf24"/>
+      <circle cx="6" cy="-6" r="1.5" fill="#10b981"/>
+      <circle cx="-6" cy="6" r="1.5" fill="#ef4444"/>
+      <circle cx="6" cy="6" r="1.5" fill="#8b5cf6"/>
+      <circle cx="0" cy="-8" r="1" fill="#06b6d4"/>
+      <circle cx="0" cy="8" r="1" fill="#f59e0b"/>
+      <circle cx="-8" cy="0" r="1" fill="#84cc16"/>
+      <circle cx="8" cy="0" r="1" fill="#ec4899"/>
+
+      <!-- Connection lines representing neural network -->
+      <path d="M-6,-6 L6,-6" stroke="#fbbf24" stroke-width="0.8" opacity="0.7"/>
+      <path d="M-6,6 L6,6" stroke="#ef4444" stroke-width="0.8" opacity="0.7"/>
+      <path d="M-6,-6 L-6,6" stroke="#10b981" stroke-width="0.8" opacity="0.7"/>
+      <path d="M6,-6 L6,6" stroke="#8b5cf6" stroke-width="0.8" opacity="0.7"/>
+      <path d="M-6,-6 L6,6" stroke="#64748b" stroke-width="0.6" opacity="0.5"/>
+      <path d="M-6,6 L6,-6" stroke="#64748b" stroke-width="0.6" opacity="0.5"/>
+
+      <!-- Central processing indicator -->
+      <circle cx="0" cy="0" r="3" fill="none" stroke="#fbbf24" stroke-width="1">
+        <animate attributeName="r" values="2;4;2" dur="2s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.8;0.3;0.8" dur="2s" repeatCount="indefinite"/>
+      </circle>
+
+      <!-- Processing spark -->
+      <circle cx="2" cy="-2" r="0.8" fill="#fbbf24">
+        <animate attributeName="opacity" values="0;1;0" dur="1.5s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+
+    <!-- Engine gradient definition -->
+    <radialGradient id="engineGrad" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="30%" stop-color="#dbeafe"/>
+      <stop offset="70%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#1e40af"/>
+    </radialGradient>
+
+    <!-- OUTPUT: report + tiny chart + API tag -->
+    <g id="icon-output-pack">
+      <rect x="-18" y="-22" width="36" height="44" rx="6" fill="#8ef5c0"/>
+      <rect x="-12" y="-10" width="24" height="4" fill="#14543d"/>
+      <rect x="-12" y="-2" width="20" height="4" fill="#14543d"/>
+      <g transform="translate(0,10)">
+        <rect x="-12" y="0" width="12" height="8" fill="#14543d"/>
+        <polyline points="-10,7 -8,5 -6,6 -4,3 -2,4 0,2" fill="none" stroke="#8ef5c0" stroke-width="1.6"/>
+      </g>
+      <rect x="20" y="-10" width="32" height="18" rx="4" fill="#5fa7ff"/>
+      <text x="36" y="3" text-anchor="middle" font-family="ui-sans-serif,system-ui" font-weight="700" font-size="10" fill="#0d1424">&lt;/&gt;</text>
+    </g>
+  </defs>
+
+  <!-- LEFT COLUMN: Inputs → Parser → Dynamic Memory (NO wrappers) -->
+  <g id="inputs" class="node" tabindex="0" role="button" aria-label="Open Inputs Deep Dive">
+    <title>Click to open Inputs Deep Dive</title>
+    <g transform="translate(210,120)"><use href="#icon-inputs-rich"/></g>
+    <text class="label" x="210" y="158" text-anchor="middle">Raw Inputs</text>
+    <text class="sub" x="210" y="174" text-anchor="middle">Docs · lab · satellite · sensors</text>
+  </g>
+
+  <!-- BIGGER gap to Parser (moved further down to y=420) -->
+  <g id="parser" class="node" tabindex="0" role="button" aria-label="Open Parser Deep Dive">
+    <title>Click to open Parser / NLP Deep Dive</title>
+    <g transform="translate(210,360)"><use href="#icon-parser-extract"/></g>
+    <text class="label" x="210" y="420" text-anchor="middle">Parser / NLP</text>
+    <text class="sub" x="210" y="440" text-anchor="middle">Extract → normalize</text>
+  </g>
+
+  <!-- Dynamic Memory: Human–AI collab (icon without words) -->
+  <g id="dynmem" class="node" tabindex="0" role="button" aria-label="Open Dynamic Memory Deep Dive">
+    <title>Click to open Dynamic Memory Deep Dive</title>
+    <g transform="translate(210,580)"><use href="#icon-dyn-collab"/></g>
+    <text class="label" x="210" y="626" text-anchor="middle">Dynamic Memory</text>
+    <text class="sub" x="210" y="644" text-anchor="middle">Human–AI collaboration (edits, overrides, notes)</text>
+  </g>
+
+  <!-- CENTER: Symbol Pool orb -->
+  <g id="pool" transform="translate(480,300)" class="orb node" tabindex="0" role="button" aria-label="Open Σ Symbol Pool Deep Dive">
+    <title>Click to open Σ Symbol Pool Deep Dive</title>
+    <circle class="halo" r="86" opacity=".35"></circle>
+    <circle class="core" r="64"></circle>
+    <g class="orbit slow">
+      <circle class="dot" cx="0" cy="-76" r="3"></circle>
+      <circle class="dot" cx="48" cy="60" r="2.6"></circle>
+      <circle class="dot" cx="-60" cy="30" r="2.6"></circle>
+    </g>
+    <g class="orbit">
+      <circle class="dot" cx="0" cy="76" r="3"></circle>
+      <circle class="dot" cx="60" cy="-24" r="2.6"></circle>
+      <circle class="dot" cx="-54" cy="-40" r="2.6"></circle>
+    </g>
+    <text class="label" x="0" y="-92" text-anchor="middle">Σ Symbol Pool</text>
+    <text class="sub" x="0" y="-110" text-anchor="middle">Shared geotechnical symbol set</text>
+  </g>
+
+  <!-- STATIC MEMORY (Provider Registry) (NO wrapper) -->
+  <g id="registry" class="node" tabindex="0" role="button" aria-label="Open Provider Registry Deep Dive" transform="translate(480,510)">
+    <title>Click to open Static Memory / Provider Registry Deep Dive</title>
+    <use href="#icon-static-reg"/>
+    <text class="label" x="0" y="78" text-anchor="middle">Static Memory</text>
+    <text class="sub" x="0" y="94" text-anchor="middle">(Provider Registry)</text>
+  </g>
+
+  <!-- Professional ENGINE Container -->
+  <g id="engine">
+    <rect class="engine-box" x="700" y="130" width="280" height="320" rx="20" ry="20"/>
+    <g transform="translate(840,180)"><use href="#icon-engine"/></g>
+    <text class="label" x="840" y="220" text-anchor="middle" style="font-size:15px; font-weight:600;">Inference Engine</text>
+    <text class="sub" x="840" y="240" text-anchor="middle" style="font-size:11px;">AI Processing Core</text>
+
+    <!-- Professional Engine Components -->
+    <g id="reasoner" class="chip node" tabindex="0" role="button" aria-label="Open Hypergraph Reasoner Deep Dive">
+      <title>Click to open Hypergraph Reasoner Deep Dive</title>
+      <rect x="720" y="280" width="220" height="45" fill="rgba(30,45,75,.9)" stroke="#3b82f6" stroke-width="1.5" rx="8" ry="8"/>
+      <text x="830" y="308" text-anchor="middle" fill="#60a5fa" font-family="ui-sans-serif" font-size="11" font-weight="600">🧠 Hypergraph Reasoner</text>
+    </g>
+
+    <g class="chip">
+      <rect x="720" y="335" width="220" height="40" fill="rgba(30,45,75,.9)" stroke="#f59e0b" stroke-width="1.5" rx="8" ry="8"/>
+      <text x="830" y="360" text-anchor="middle" fill="#fbbf24" font-family="ui-sans-serif" font-size="11" font-weight="600">💰 Cost-aware Planner</text>
+    </g>
+
+    <g class="chip">
+      <rect x="720" y="385" width="220" height="40" fill="rgba(30,45,75,.9)" stroke="#10b981" stroke-width="1.5" rx="8" ry="8"/>
+      <text x="830" y="410" text-anchor="middle" fill="#34d399" font-family="ui-sans-serif" font-size="11" font-weight="600">📋 Lineage & Explanation</text>
+    </g>
+  </g>
+
+  <!-- OUTPUT (NO wrapper) -->
+  <g id="output">
+    <g transform="translate(1110,304)"><use href="#icon-output-pack"/></g>
+    <text class="label" x="1110" y="352" text-anchor="middle">Output</text>
+    <text class="sub" x="1110" y="370" text-anchor="middle">Reports &amp; API</text>
+  </g>
+
+  <!-- ENHANCED DATA FLOW PIPELINE -->
+  <!-- Primary data flow paths -->
+  <path id="flow-inputs-parser" class="wire pulse" d="M210,166 L210,308"/>
+  <path id="flow-parser-memory" class="wire pulse" d="M210,456 L210,560"/>
+  <path id="flow-parser-pool" class="wire pulse mint" d="M280,422 C394,354 330,308 398,300"/>
+  <path id="flow-memory-pool" class="wire pulse" d="M340,600 C388,580 420,430 444,360"/>
+  <path id="flow-registry-pool" class="wire pulse amber" d="M480,446 L480,394"/>
+  <path id="flow-pool-engine" class="wire pulse fast" d="M544,300 C620,300 660,300 680,300"/>
+  <path id="flow-engine-output" class="wire pulse" d="M1010,300 C1028,300 1036,300 1080,300"/>
+
+  <!-- ANIMATED DATA PARTICLES -->
+  <!-- Inputs → Parser particles -->
+  <g class="particle-flow" data-path="flow-inputs-parser">
+    <circle class="particle" cx="0" cy="0" r="3" fill="url(#particleGrad)">
+      <animateMotion dur="3s" repeatCount="indefinite">
+        <mpath href="#flow-inputs-parser"/>
+      </animateMotion>
+    </circle>
+    <circle class="particle" cx="0" cy="0" r="2" fill="#10b981" opacity="0.7">
+      <animateMotion dur="4s" repeatCount="indefinite" begin="1s">
+        <mpath href="#flow-inputs-parser"/>
+      </animateMotion>
+    </circle>
+  </g>
+
+  <!-- Parser → Memory particles -->
+  <g class="particle-flow" data-path="flow-parser-memory">
+    <circle class="particle" cx="0" cy="0" r="3.5" fill="#3b82f6">
+      <animateMotion dur="2.8s" repeatCount="indefinite">
+        <mpath href="#flow-parser-memory"/>
+      </animateMotion>
+    </circle>
+  </g>
+
+  <!-- Parser → Pool particles -->
+  <g class="particle-flow" data-path="flow-parser-pool">
+    <circle class="particle" cx="0" cy="0" r="2.5" fill="#10b981">
+      <animateMotion dur="3.5s" repeatCount="indefinite">
+        <mpath href="#flow-parser-pool"/>
+      </animateMotion>
+    </circle>
+    <circle class="particle" cx="0" cy="0" r="2" fill="#f59e0b" opacity="0.8">
+      <animateMotion dur="4.2s" repeatCount="indefinite" begin="0.5s">
+        <mpath href="#flow-parser-pool"/>
+      </animateMotion>
+    </circle>
+  </g>
+
+  <!-- Memory → Pool particles -->
+  <g class="particle-flow" data-path="flow-memory-pool">
+    <circle class="particle" cx="0" cy="0" r="3" fill="#8b5cf6">
+      <animateMotion dur="3.2s" repeatCount="indefinite">
+        <mpath href="#flow-memory-pool"/>
+      </animateMotion>
+    </circle>
+  </g>
+
+  <!-- Registry → Pool particles -->
+  <g class="particle-flow" data-path="flow-registry-pool">
+    <circle class="particle" cx="0" cy="0" r="2.5" fill="#f59e0b">
+      <animateMotion dur="2.5s" repeatCount="indefinite">
+        <mpath href="#flow-registry-pool"/>
+      </animateMotion>
+    </circle>
+  </g>
+
+  <!-- Pool → Engine particles -->
+  <g class="particle-flow" data-path="flow-pool-engine">
+    <circle class="particle" cx="0" cy="0" r="4" fill="#06b6d4">
+      <animateMotion dur="2.2s" repeatCount="indefinite">
+        <mpath href="#flow-pool-engine"/>
+      </animateMotion>
+    </circle>
+    <circle class="particle" cx="0" cy="0" r="2.5" fill="#10b981" opacity="0.8">
+      <animateMotion dur="3s" repeatCount="indefinite" begin="0.8s">
+        <mpath href="#flow-pool-engine"/>
+      </animateMotion>
+    </circle>
+  </g>
+
+  <!-- Engine → Output particles -->
+  <g class="particle-flow" data-path="flow-engine-output">
+    <circle class="particle" cx="0" cy="0" r="3.5" fill="#3b82f6">
+      <animateMotion dur="2.8s" repeatCount="indefinite">
+        <mpath href="#flow-engine-output"/>
+      </animateMotion>
+    </circle>
+    <circle class="particle" cx="0" cy="0" r="2" fill="#10b981">
+      <animateMotion dur="3.5s" repeatCount="indefinite" begin="1.2s">
+        <mpath href="#flow-engine-output"/>
+      </animateMotion>
+    </circle>
+  </g>
+
+  <!-- Processing status overlays -->
+  <g class="processing-indicators">
+    <!-- Parser processing indicator -->
+    <circle cx="210" cy="360" r="25" fill="none" stroke="#10b981" stroke-width="2" opacity="0.3">
+      <animate attributeName="r" values="20;30;20" dur="2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.2;0.5;0.2" dur="2s" repeatCount="indefinite"/>
+    </circle>
+
+    <!-- Symbol Pool processing indicator -->
+    <circle cx="480" cy="300" r="35" fill="none" stroke="#3b82f6" stroke-width="2" opacity="0.3">
+      <animate attributeName="r" values="30;45;30" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.2;0.6;0.2" dur="3s" repeatCount="indefinite"/>
+    </circle>
+
+    <!-- Engine processing indicator -->
+    <circle cx="845" cy="300" r="40" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.3">
+      <animate attributeName="r" values="35;50;35" dur="2.5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.3;0.7;0.3" dur="2.5s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+</svg>
+</div>
+
+<script>
+(function(){
+  // Unified summary: simple hide
+  const sum = document.getElementById('summary');
+  const sumClose = document.getElementById('sumClose');
+  if (sumClose){
+    sumClose.addEventListener('click', ()=>{
+      sum.style.display = 'none';
+    });
+  }
+
+  // Overlay elements
+  const overlay = document.getElementById('overlay');
+  const ovFrame = document.getElementById('ovFrame');
+  const ovClose = document.getElementById('ovClose');
+  const scrim   = overlay.querySelector('.scrim');
+
+  function openOverlay(url, title='Deep Dive'){
+    if (!url) return;
+    ovFrame.title = title;
+    ovFrame.src = url;
+    overlay.classList.add('active');
+    overlay.setAttribute('aria-hidden','false');
+    try{ ovClose.focus(); }catch(_){}
+  }
+  function closeOverlay(){
+    ovFrame.src = 'about:blank';
+    overlay.classList.remove('active');
+    overlay.setAttribute('aria-hidden','true');
+  }
+
+  // Node → deep-dive pages (existing files in same folder or adjust path)
+  const OPENERS = {
+    inputs:   'input-animation.html',
+    parser:   'Parser_animation.html',
+    registry: 'provider_animation.html',
+    reasoner: 'hypergraph_animation.html',
+    dynmem:   'dynamic_memory_animation.html',
+    pool:     'pool_animation.html',
+    output:   'output_animation.html'
+  };
+
+
+
+  // Hook up deep-dives
+  ['inputs','parser','registry','reasoner','dynmem','pool','output'].forEach(id=>{
+    const el = document.getElementById(id);
+    if (!el) return;
+    const url = OPENERS[id];
+    const title = ({
+      inputs:'Inputs Deep Dive',
+      parser:'Parser / NLP Deep Dive',
+      registry:'Static Memory / Provider Registry Deep Dive',
+      reasoner:'Hypergraph Reasoner Deep Dive',
+      dynmem:'Dynamic Memory Deep Dive',
+      pool:'Σ Symbol Pool Deep Dive',
+      output:'Output'
+    })[id] || 'Deep Dive';
+    const go = (ev)=>{ ev.preventDefault(); ev.stopPropagation(); openOverlay(url, title); };
+    el.addEventListener('click', go, true);
+    el.addEventListener('keydown', (ev)=>{ if (ev.key==='Enter' || ev.key===' ') go(ev); }, true);
+    el.style.cursor = 'pointer';
+  });
+
+  // Overlay dismissal + Esc
+  ovClose.addEventListener('click', closeOverlay);
+  scrim.addEventListener('click', closeOverlay);
+  document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape'){ if (overlay.classList.contains('active')) closeOverlay(); }});
+  window.addEventListener('message', (e)=>{
+    const d = e.data || {};
+    if ((d.source === 'spider-anim' || d.kind === 'spider-anim') && d.cmd === 'exit') closeOverlay();
+  });
+})();
+</script>
+</body>
+</html>

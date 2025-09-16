@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Artificial Intelligence Projects</title>
+  <meta name="description" content="Interactive AI projects: modelling, inference, and visualization." />
+  <link rel="stylesheet" href="assets/style.css" />
+  
+  <style>
+    .back-row{ display:flex; justify-content:space-between; align-items:center; margin: 0 0 12px; }
+    /* Page-local refinements for AI projects overview */
+    .back-row h2{ margin:0; background: linear-gradient(90deg, var(--brand), var(--brand-2)); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+
+    /* Grid sizing tuned for previews */
+    .cards{ grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+    @media (max-width: 900px){ .cards{ grid-template-columns: 1fr; } }
+
+    /* Clean preview: blur/dim live iframe and show a neat CTA overlay */
+    /* Replaced snapshot+overlay with clean category badge + CTA only */
+    .iframe-wrap, .iframe-veil{ display:none }
+
+    /* Card text hierarchy */
+    .card h3{ margin:.6rem 0 .25rem; font-weight:600 }
+    .card p{ color: var(--muted); margin:0 0 .6rem }
+    /* Category badges */
+    .card-hero{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
+    .cat-badge{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; border:1px solid var(--stroke); background:rgba(26,26,40,.6); color:var(--fg); }
+    .cat-genai{ border-color: rgba(0,255,255,.35); color: var(--brand); background: rgba(0,255,255,.08); }
+    .cat-multi{ border-color: rgba(138,43,226,.35); color: #caa6ff; background: rgba(138,43,226,.10); }
+    .cat-symbolic{ border-color: rgba(0,128,255,.35); color: #7ec3ff; background: rgba(0,128,255,.10); }
+    .cat-rl{ border-color: rgba(57,255,20,.35); color: #8dff6f; background: rgba(57,255,20,.10); }
+    .cat-human{ border-color: rgba(255,0,102,.35); color: #ff86b4; background: rgba(255,0,102,.10); }
+
+    .card p strong{ color: var(--fg) }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="site-header" role="banner" aria-label="Site header">
+    <div class="container header-inner">
+      <a class="brand" href="index.html" aria-label="Home"><span>Javad Ghorbani</span></a>
+      <nav class="nav" aria-label="Primary">
+        <ul>
+          <li class="nav-dropdown">
+            <a href="index.html#projects">Projects</a>
+            <div class="dropdown-menu">
+              <div class="dropdown-item has-sub">
+                <a href="ai-projects.html">Artificial Intelligence</a>
+                <div class="dropdown-submenu">
+                  <a href="ai-projects.html#overview">Overview</a>
+                  <a href="#ai-demo">Live Demo</a>
+                  <a href="#ai-code">Source Code</a>
+                  <a href="#ai-paper">Research Paper</a>
+                </div>
+              </div>
+              <div class="dropdown-item has-sub">
+                <a href="geomechanics-projects.html">Computational Geomechanics</a>
+                <div class="dropdown-submenu">
+                  <a href="geomechanics-projects.html#overview">Overview</a>
+                  <a href="geomechanics-projects.html#simulations">Interactive Simulation</a>
+                  <a href="geomechanics-projects.html#docs">Documentation</a>
+                  <a href="geomechanics-projects.html#research">Research</a>
+                </div>
+              </div>
+            </div>
+          </li>
+          <li><a href="index.html#about">About</a></li>
+          <li><a class="btn btn-sm" href="index.html#contact-me">Contact</a></li>
+        </ul>
+      </nav>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="nav-drawer" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+    <div id="nav-drawer" class="nav-drawer" hidden>
+      <a href="index.html#projects">Projects</a>
+      <div class="drawer-submenu">
+        <a href="ai-projects.html">• Artificial Intelligence</a>
+        <a href="geomechanics-projects.html">• Computational Geomechanics</a>
+      </div>
+      <a href="index.html#about">About</a>
+      <a href="index.html#contact-me" class="btn btn-sm">Contact</a>
+    </div>
+  </header>
+
+  <script>
+    // Mobile nav behavior parity with index.html
+    (function(){
+      const btn = document.querySelector('.nav-toggle');
+      const drawer = document.getElementById('nav-drawer');
+      if (!btn || !drawer) return;
+      function open(){ drawer.hidden = false; btn.setAttribute('aria-expanded','true'); document.documentElement.style.overflow = 'hidden'; }
+      function close(){ drawer.hidden = true; btn.setAttribute('aria-expanded','false'); document.documentElement.style.overflow = ''; }
+      btn.addEventListener('click', () => drawer.hidden ? open() : close());
+      drawer.addEventListener('click', (e) => { if (e.target && e.target.tagName === 'A') close(); });
+      window.addEventListener('keydown', e => { if (e.key === 'Escape' && !drawer.hidden) close(); });
+    })();
+  </script>
+
+  <main id="main">
+    <section class="stripe" aria-label="AI Projects">
+      <div class="container">
+        <div class="back-row">
+          <h2>Artificial Intelligence</h2>
+          <a class="btn btn-ghost" href="index.html#projects">Back</a>
+        </div>
+        <p class="lede" style="max-width:80ch; margin:0 0 10px;">Projects across autonomous modelling, multiagent systems, symbolic inference, and integrated data views.</p>
+
+        <div class="cards">
+          <!-- AlphaGeo -->
+          <article class="card">
+            <header class="card-hero">
+              <span class="cat-badge cat-genai" aria-label="Category: Generative AI">
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2l3 6 6 3-6 3-3 6-3-6-6-3 6-3z"/></svg>
+                Generative AI
+              </span>
+              <h3>AlphaGeo — Constitutive Modeling Automation and Automatic Calibration</h3>
+            </header>
+            <p>Automatic constitutive modeling and parameter identification using <strong>self‑play</strong>, <strong>MCTS</strong>, and <strong>Bayesian calibration</strong> for geomechanics. Human‑in‑the‑loop workflows and reproducible pipelines for <strong>scientific machine learning</strong>.</p>
+            <div class="btn-row"><a class="btn" href="alphageo.html" rel="noopener">Open</a></div>
+          </article>
+
+          <!-- GenCAI -->
+          <article class="card">
+            <header class="card-hero">
+              <span class="cat-badge cat-multi" aria-label="Category: Multi‑Agent Systems">
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3a3 3 0 110 6 3 3 0 010-6Zm0 6v6m-5-3a3 3 0 110 6 3 3 0 010-6Zm10 0a3 3 0 110 6 3 3 0 010-6Z"/></svg>
+                Multi‑Agent Systems
+              </span>
+              <h3>GenCAI — Multiagent Constitutive Builder</h3>
+            </header>
+            <p>Orchestrated <strong>multi‑agent</strong> collaboration for generative model design, evaluation, and refinement. Built‑in <strong>explainability</strong> and <strong>human‑AI collaboration</strong> for auditable constitutive modelling.</p>
+            <div class="btn-row"><a class="btn" href="gencai-multiagent-animation.html" rel="noopener">Open</a></div>
+          </article>
+
+          <!-- SPIDER Symbolic -->
+          <article class="card">
+            <header class="card-hero">
+              <span class="cat-badge cat-symbolic" aria-label="Category: Symbolic AI & Explainable AI">
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 6h16v2H4V6Zm0 5h10v2H4v-2Zm0 5h16v2H4v-2Z"/></svg>
+                Symbolic AI & XAI
+              </span>
+              <h3>SPIDER — Symbolic Planning and Explainable Inference</h3>
+            </header>
+            <p><strong>Symbolic planning</strong>, rule‑based <strong>inference</strong>, and <strong>knowledge graph</strong> reasoning for transparent, auditable decision‑making. End‑to‑end <strong>explainable AI</strong> with verifiable traces.</p>
+            <div class="btn-row"><a class="btn" href="system_architecture/system-architecture-interactive.html" rel="noopener">Open</a></div>
+          </article>
+
+          <!-- Ground Assessment RL -->
+          <article class="card">
+            <header class="card-hero">
+              <span class="cat-badge cat-rl" aria-label="Category: Reinforcement Learning">
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 2l10 10-6 2-2 6L7 2z"/></svg>
+                Reinforcement Learning
+              </span>
+              <h3>Ground Assessment — Policy Learning for Condition Assessment</h3>
+            </header>
+            <p><strong>Reinforcement learning</strong> for ground condition assessment, optimizing policies from <strong>sensor</strong> and <strong>environmental</strong> signals with uncertainty‑aware evaluation for infrastructure risk.</p>
+            <div class="btn-row"><a class="btn" href="ground-assessment-rl.html" rel="noopener">Open</a></div>
+          </article>
+
+          <!-- Road Networks Integration -->
+          <article class="card">
+            <header class="card-hero">
+              <span class="cat-badge cat-human" aria-label="Category: Human‑AI Collaboration & Geospatial AI">
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 017 7c0 5-7 13-7 13S5 14 5 9a7 7 0 017-7Zm0 9a2 2 0 100-4 2 2 0 000 4Z"/></svg>
+                Human‑AI Collaboration
+              </span>
+              <h3>Integrated Road Networks — Climate, Traffic, Soil, Monitoring</h3>
+            </header>
+            <p><strong>Geospatial AI</strong> that fuses <strong>climate</strong>, <strong>traffic</strong>, and <strong>soil</strong> data with monitoring to power <strong>predictive maintenance</strong>, <strong>digital twins</strong>, and data‑driven planning.
+            </p>
+            <div class="btn-row"><a class="btn" href="road-networks.html" rel="noopener">Open</a></div>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+
+

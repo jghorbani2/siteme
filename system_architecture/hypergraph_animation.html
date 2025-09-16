@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Spider — Hypergraph Reasoner (Overview)</title>
+<meta name="theme-color" content="#0b0f1a"/>
+<style>
+  :root{
+    --bg0:#0b0f1a; --bg1:#101a2f; --stroke:#273a5e;
+    --ink:#e8efff; --muted:#9eb0d7;
+    --known:#6ee7a8;  /* known symbols */
+    --goal:#9fb3ff;   /* goal symbols  */
+    --frontier:#ffd36c; /* applicable providers */
+    --chosen:#8ef5c0; /* fired provider */
+    --meas:#b49cff;   /* measurement tokens */
+  }
+  html,body{height:100%;margin:0;background:radial-gradient(1200px 800px at 50% 20%, var(--bg1) 0%, var(--bg0) 55%, #090e18 100%); color:var(--ink); font:14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial; overflow:hidden}
+  canvas{position:fixed; inset:0; width:100vw; height:100vh; display:block}
+
+  .topbar{
+    position:fixed; left:12px; right:12px; top:12px; z-index:6;
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:rgba(12,18,32,.55); border:1px solid var(--stroke); border-radius:12px; padding:10px 12px; backdrop-filter:saturate(1.1) blur(6px)
+  }
+  .topbar h2{margin:0; font:700 15px/1.2 ui-sans-serif}
+  .topbar p{margin:0; color:#c6d5f3; font-size:13px}
+  .controls{display:flex; gap:8px; flex-wrap:wrap}
+  .btn{background:rgba(13,20,36,.9); color:#cfe3ff; border:1px solid #24304c; border-radius:8px; padding:6px 10px; cursor:pointer; font:600 12px/1.2 ui-sans-serif}
+  .btn:focus{outline:2px solid #6aaeff; outline-offset:2px}
+  .chip{background:rgba(13,20,36,.9); color:#cfe3ff; border:1px solid #24304c; border-radius:999px; padding:6px 10px; font:600 12px/1.2 ui-sans-serif; cursor:pointer}
+
+  .panel{
+    position:fixed; right:12px; top:64px; width:min(380px, 42vw); max-height:calc(100vh - 76px); z-index:6;
+    background:rgba(15,22,36,.94); border:1px solid var(--stroke); border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,.55);
+    padding:12px; display:none; overflow:auto
+  }
+  .panel.show{display:block}
+  .panel.guide{right:auto; left:12px; width:min(420px, 46vw)}
+  .panel h3{margin:0 0 6px; font:700 15px/1.2 ui-sans-serif}
+  .panel p{margin:0 0 8px; color:#cfe3ff}
+  .kv{display:grid; grid-template-columns:auto 1fr; gap:6px 10px; font-size:12px}
+  .kv code{background:rgba(28,40,70,.6); padding:2px 4px; border-radius:5px}
+  .close{position:absolute; right:8px; top:8px; border:0; background:transparent; color:#bcd1ff; cursor:pointer; font:900 18px/1 ui-sans-serif}
+  .prog{height:6px; background:rgba(26,38,64,.9); border:1px solid rgba(55,78,120,.8); border-radius:6px; overflow:hidden; margin:6px 0 10px}
+  .prog>i{display:block; height:100%; width:0%; background:linear-gradient(90deg, #60a5fa, #34d399); transition:width .12s ease}
+
+  .toast{position:fixed; left:50%; transform:translateX(-50%); bottom:12px; font:600 12px ui-sans-serif; color:#cfe3ff; opacity:0; transition:opacity .35s ease}
+  @media (max-width: 1024px){
+    .panel{top:108px}
+  }
+</style>
+</head>
+<body>
+<div class="topbar" role="region" aria-label="Hypergraph Reasoner — Overview">
+  <div>
+    <h2>Hypergraph Reasoner — Overview</h2>
+    <p>Stage-wise scan → choose → pulse to goals. Tests appear only if inference stalls.</p>
+  </div>
+  <div class="controls">
+    <button class="btn" id="btnReplay">Replay</button>
+    <button class="btn" id="btnScenario">Demo: require measurements</button>
+    <span class="chip" id="chipResult" title="Click for summary">Results: —</span>
+  </div>
+</div>
+
+<aside class="panel" id="panel" role="dialog" aria-modal="false">
+  <button class="close" aria-label="Close">×</button>
+  <h3 id="pTitle">–</h3>
+  <p id="pBody"></p>
+  <div class="kv" id="pKV"></div>
+</aside>
+
+<!-- Left, always-visible guide synced to stages -->
+<aside class="panel guide" id="guide" role="note" aria-live="polite" style="display:block">
+  <h3 id="gTitle">Phase 0 — Algebraic propagation</h3>
+  <p id="gBody">Laws/constraints that need no search are applied first. This mirrors _direct_propagate: any provider whose inputs are already known fires immediately and adds its output to Σ.</p>
+  <div class="prog"><i id="gProg"></i></div>
+  <div class="kv" id="gKV"></div>
+</aside>
+
+<canvas id="fx"></canvas>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  // ---------------- Basics ----------------
+  const canvas = document.getElementById('fx');
+  const ctx = canvas.getContext('2d');
+  const panel = document.getElementById('panel');
+  const guide = document.getElementById('guide');
+  const gTitle = document.getElementById('gTitle');
+  const gBody  = document.getElementById('gBody');
+  const gKV    = document.getElementById('gKV');
+  const gProg  = document.getElementById('gProg');
+  const pTitle = document.getElementById('pTitle');
+  const pBody  = document.getElementById('pBody');
+  const pKV    = document.getElementById('pKV');
+  panel.querySelector('.close').addEventListener('click', ()=> panel.classList.remove('show'));
+
+  let dpr = Math.max(1, Math.min(2.5, window.devicePixelRatio||1));
+  let W=0,H=0,CX=0,CY=0;
+  function resize(){
+    const r = canvas.getBoundingClientRect();
+    W = Math.max(1, Math.floor((r.width||window.innerWidth)));
+    H = Math.max(1, Math.floor((r.height||window.innerHeight)));
+    canvas.width  = Math.max(1, Math.floor(W*dpr));
+    canvas.height = Math.max(1, Math.floor(H*dpr));
+    CX = (W*0.5)*dpr; CY = (H*0.52)*dpr;
+    layoutSymbols();
+    buildCurves();
+  }
+  window.addEventListener('resize', resize, {passive:true});
+
+  function openPanel(title, body, kv){
+    pTitle.textContent = title;
+    pBody.innerHTML    = body;
+    pKV.innerHTML = '';
+    (kv||[]).forEach(([k,v])=>{
+      const s1=document.createElement('small'); s1.textContent=k;
+      const s2=document.createElement('span'); s2.innerHTML=v;
+      pKV.appendChild(s1); pKV.appendChild(s2);
+    });
+    panel.classList.add('show');
+  }
+
+  const toast = document.getElementById('toast');
+  function showToast(t){ toast.textContent=t; toast.style.opacity='1'; clearTimeout(showToast._t); toast._t=setTimeout(()=>toast.style.opacity='0', 1100); }
+
+  // ---------------- Data (Σ, P, Tests) ----------------
+  const symbols = [
+    {id:'Gs', label:'Gs'}, {id:'e', label:'e'}, {id:'n', label:'n'}, {id:'w', label:'w'},
+    {id:'rho_d', label:'ρ_d'}, {id:'S', label:'S'}, {id:'rho', label:'ρ'},
+    {id:'gamma', label:'γ'}, {id:'soil_type', label:'USCS'}, {id:'phi', label:'φ'}
+  ];
+  const nodeMap = Object.fromEntries(symbols.map(s=>[s.id,s]));
+
+  const providers = [
+    {id:'p_n_from_e',  name:'Porosity from void ratio',      kind:'law',    in:['e'],                 out:'n',     cost:0.00},
+    {id:'p_e_from_n',  name:'Void ratio from porosity',      kind:'law',    in:['n'],                 out:'e',     cost:0.00},
+    {id:'p_S',         name:'S from w, Gs, e',               kind:'cons',   in:['w','Gs','e'],        out:'S',     cost:0.90},
+    {id:'p_rho',       name:'ρ from ρ_d, w, S',              kind:'cons',   in:['rho_d','w','S'],     out:'rho',   cost:0.85},
+    {id:'p_gamma',     name:'γ from ρ',                      kind:'law',    in:['rho'],               out:'gamma', cost:0.00},
+    {id:'p_phi',       name:'φ from USCS (lookup)',          kind:'lookup', in:['soil_type'],         out:'phi',   cost:1.10},
+    // Alternates (keep them for richer frontier visuals)
+    {id:'p_S_approx',  name:'S ≈ f(w,e)',                    kind:'emp',    in:['w','e'],             out:'S',     cost:1.05},
+    {id:'p_rho_approx',name:'ρ ≈ f(ρ_d,w)',                  kind:'emp',    in:['rho_d','w'],         out:'rho',   cost:1.02},
+  ];
+
+  const tests = [
+    {id:'m_uscs',  yields:'soil_type', name:'USCS test',   cost:0.40, time:'2h'},
+    {id:'m_w',     yields:'w',         name:'Moisture',    cost:0.10, time:'2h'},
+    {id:'m_rho_d', yields:'rho_d',     name:'Proctor',     cost:0.80, time:'1d'},
+  ];
+
+  // Initial contexts
+  const initialContextFull = { Gs:2.65, e:0.62, rho_d:1.80, w:0.12, soil_type:'SP' };
+  const TARGET = new Set(['gamma','phi']); // goals
+
+  let requireMeasurementsDemo = false;
+
+  function makeInitialKnown(){
+    const base = {...initialContextFull};
+    if (requireMeasurementsDemo) delete base.soil_type;
+    return new Set(Object.keys(base));
+  }
+  const values = {...initialContextFull}; // only for showing value presence; not used numerically
+
+  // ---------------- Layout (ring) ----------------
+  function layoutSymbols(){
+    const R = Math.min(W,H)*0.33*dpr;
+    symbols.forEach((s,i)=>{
+      const a = (i/symbols.length)*Math.PI*2 - Math.PI/2;
+      s.x = CX + Math.cos(a)*R;
+      s.y = CY + Math.sin(a)*R;
+    });
+  }
+
+  // Curves and capsule positions per provider
+  const pGeom = new Map(); // id -> {curves:[{pts,len}], capsule:{x,y}}
+  function buildCurves(){
+    pGeom.clear();
+    for (const p of providers){
+      const out = nodeMap[p.out];
+      const curves = [];
+      let cx=0, cy=0, ccount=0;
+      for (const inp of p.in){
+        const A = nodeMap[inp], B = out;
+        const mid = {x:(A.x+B.x)/2, y:(A.y+B.y)/2 - 56*dpr}; // arc bow upward
+        const pts=[]; const N=40;
+        for (let i=0;i<=N;i++){
+          const t=i/N;
+          const x=(1-t)*(1-t)*A.x + 2*(1-t)*t*mid.x + t*t*B.x;
+          const y=(1-t)*(1-t)*A.y + 2*(1-t)*t*mid.y + t*t*B.y;
+          pts.push({x,y});
+        }
+        let L=0; for (let i=1;i<pts.length;i++){ const dx=pts[i].x-pts[i-1].x, dy=pts[i].y-pts[i-1].y; L+=Math.hypot(dx,dy); }
+        curves.push({pts,len:L});
+        // for capsule centroid (closer to output, at ~65% along)
+        const idx = Math.floor(pts.length*0.65);
+        cx += pts[idx].x; cy += pts[idx].y; ccount++;
+      }
+      const capsule = {x: cx/Math.max(1,ccount), y: cy/Math.max(1,ccount)};
+      pGeom.set(p.id, {curves, capsule});
+    }
+  }
+
+  // ---------------- Drawing ----------------
+  function drawNode(sym, isKnown, isGoal){
+    const r = 18*dpr;
+    if (isKnown || isGoal){
+      const col = isKnown ? '150,90%,70%' : '210,100%,70%';
+      const g = ctx.createRadialGradient(sym.x,sym.y,0, sym.x,sym.y, 26*dpr);
+      g.addColorStop(0, `hsla(${col},0.85)`); g.addColorStop(1, `hsla(${col},0)`);
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sym.x,sym.y, 26*dpr, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.fillStyle = '#0d1424';
+    ctx.beginPath(); ctx.arc(sym.x,sym.y, r, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = 'rgba(40,60,100,.9)'; ctx.lineWidth = 1.5*dpr; ctx.beginPath(); ctx.arc(sym.x,sym.y, r, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = '#eaf3ff'; ctx.font = `${12*dpr}px ui-sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(sym.label, sym.x, sym.y);
+  }
+
+  function colorForKind(k){
+    return k==='law' ? '150,100%,65%' : k==='cons' ? '200,100%,65%' : k==='emp' ? '45,100%,65%' : k==='lookup' ? '20,100%,65%' : '280,100%,70%';
+  }
+
+  function drawProviderLines(p, style){
+    const col = colorForKind(p.kind);
+    const geom = pGeom.get(p.id); if (!geom) return;
+    const alpha = style==='frontier' ? 0.92 : style==='chosen' ? 1.0 : 0.24;
+    for (const e of geom.curves){
+      ctx.beginPath();
+      ctx.moveTo(e.pts[0].x, e.pts[0].y);
+      for (let i=1;i<e.pts.length;i++){ ctx.lineTo(e.pts[i].x, e.pts[i].y); }
+      ctx.strokeStyle = `hsla(${col}, ${alpha})`;
+      ctx.lineWidth   = style==='chosen' ? 3*dpr : 2*dpr;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+  }
+
+  function drawProviderCapsule(p, style){
+    const geom = pGeom.get(p.id); if (!geom) return;
+    const {x,y} = geom.capsule;
+    const col = colorForKind(p.kind);
+    // glow
+    const g = ctx.createRadialGradient(x,y,0, x,y, 18*dpr);
+    const a = style==='frontier' ? 0.85 : style==='chosen' ? 0.95 : 0.2;
+    g.addColorStop(0, `hsla(${col}, ${a})`); g.addColorStop(1, `hsla(${col}, 0)`);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x,y, 18*dpr, 0, Math.PI*2); ctx.fill();
+    // core capsule
+    const w=26*dpr, h=12*dpr, r=8*dpr;
+    ctx.fillStyle='rgba(16,24,40,0.85)'; ctx.strokeStyle='rgba(46,69,116,0.95)'; ctx.lineWidth=1*dpr;
+    roundRect(ctx, x-w/2, y-h/2, w, h, r); ctx.fill(); roundRect(ctx, x-w/2, y-h/2, w, h, r); ctx.stroke();
+
+    // tiny cost bar (relative within all providers)
+    const minC = Math.min(...providers.map(pp=>pp.cost));
+    const maxC = Math.max(...providers.map(pp=>pp.cost));
+    const t = (p.cost - minC) / Math.max(1e-6, (maxC-minC)); // 0..1
+    const barW = w-8*dpr, barH = 3.5*dpr, bx = x-w/2+4*dpr, by = y+h/2 - barH - 2*dpr;
+    ctx.fillStyle='rgba(30,44,76,0.9)'; ctx.fillRect(bx, by, barW, barH);
+    ctx.fillStyle='rgba(160,200,255,0.95)'; ctx.fillRect(bx, by, barW*(1-t), barH);
+  }
+
+  function drawPulseAlong(p, tNorm){ // 0..1
+    const col = colorForKind(p.kind);
+    const geom = pGeom.get(p.id); if (!geom) return;
+    for (const e of geom.curves){
+      const idx = Math.floor(tNorm*(e.pts.length-1));
+      const pt = e.pts[Math.max(0, Math.min(e.pts.length-1, idx))];
+      const g1 = ctx.createRadialGradient(pt.x,pt.y,0, pt.x,pt.y, 10*dpr);
+      g1.addColorStop(0, `hsla(${col},0.95)`); g1.addColorStop(1, `hsla(${col},0)`);
+      ctx.fillStyle = g1; ctx.beginPath(); ctx.arc(pt.x,pt.y, 10*dpr, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#eaf3ff'; ctx.beginPath(); ctx.arc(pt.x,pt.y, 3.2*dpr, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  function roundRect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+  // ---------------- Stage machine ----------------
+  const STAGES = {
+    SETUP:'SETUP', SCAN:'SCAN_FRONTIER', CHOOSE:'CHOOSE',
+    FIRE:'FIRE_PULSE', CHECK:'GOAL_CHECK', STALL:'STALL_CHECK',
+    SUGGEST:'SUGGEST_MEASURE', SUCCESS:'SUCCESS', IDLE:'IDLE_LOOP'
+  };
+  const DUR = { SETUP:1600, SCAN:1800, CHOOSE:800, FIRE:1800, CHECK:600, STALL:1000, SUCCESS:1600 };
+
+  let stage = STAGES.SETUP, tStage = 0;
+  let known = makeInitialKnown();
+  let plan = []; // list of steps; step = {type:'provider'|'measure', id:...}
+  let chosen = null; // current chosen provider
+  let pulsesT = 0;   // 0..1 for pulse progress
+
+  // For stall/suggestions
+  let suggestTokens = []; // [{x,y,test}]
+  let autoSuggestionAt = 0;
+
+  // ---------------- Frontier & helpers ----------------
+  function frontierNow(){
+    return providers.filter(p => p.in.every(k=>known.has(k)) && !known.has(p.out));
+  }
+  function chooseMinCost(fs){
+    let best=null, c=Infinity;
+    for (const p of fs){ if (p.cost < c - 1e-9) {c=p.cost; best=p;} }
+    return best;
+  }
+  function goalsMet(){
+    for (const g of TARGET) if (!known.has(g)) return false;
+    return true;
+  }
+
+  // symbolic forward sweep (S_nm)
+  function forwardSweep(){
+    const S = new Set([...known]); // start from current known
+    let changed = true;
+    while (changed){
+      changed = false;
+      for (const p of providers){
+        if (p.in.every(k=>S.has(k)) && !S.has(p.out)){
+          S.add(p.out); changed = true;
+        }
+      }
+    }
+    return S;
+  }
+
+  // Phase 0 — algebraic propagation (approximation of _direct_propagate)
+  function algebraicPropagate(){
+    const algebraKinds = new Set(['law','cons']);
+    const steps = [];
+    let changed = true;
+    while (changed){
+      changed = false;
+      for (const p of providers){
+        if (!algebraKinds.has(p.kind)) continue;
+        if (p.in.every(k=>known.has(k)) && !known.has(p.out)){
+          known.add(p.out);
+          steps.push({type:'provider', id:p.id, tag:'algebra'});
+          changed = true;
+        }
+      }
+    }
+    return steps;
+  }
+
+  // Build dependency graph (symbol -> symbols it depends on) for SCC hinting
+  function buildSymbolGraph(){
+    const graph = new Map();
+    function addEdge(a,b){ if(!graph.has(a)) graph.set(a,new Set()); graph.get(a).add(b); }
+    for (const p of providers){
+      for (const out of [p.out]){
+        for (const inp of p.in){ addEdge(out, inp); addEdge(inp, out); }
+      }
+    }
+    return graph;
+  }
+
+  function detectSCCs(unknownSet){
+    // Simple Tarjan over symbol graph
+    const graph = buildSymbolGraph();
+    const idx=new Map(), low=new Map(), stack=[], on=new Set();
+    let id=0; const sccs=[];
+    function dfs(v){
+      idx.set(v,id); low.set(v,id); id++; stack.push(v); on.add(v);
+      const nbrs = graph.get(v)||new Set();
+      for (const w of nbrs){
+        if (!idx.has(w)){ dfs(w); low.set(v, Math.min(low.get(v), low.get(w))); }
+        else if (on.has(w)){ low.set(v, Math.min(low.get(v), idx.get(w))); }
+      }
+      if (low.get(v)===idx.get(v)){
+        const comp=new Set();
+        while (true){ const w=stack.pop(); on.delete(w); comp.add(w); if (w===v) break; }
+        if (comp.size>1){ const filtered=[...comp].filter(x=>unknownSet.has(x)); if (filtered.length>1) sccs.push(new Set(filtered)); }
+      }
+    }
+    for (const v of graph.keys()){ if (!idx.has(v)) dfs(v); }
+    return sccs;
+  }
+
+  // Very lightweight path finder to rank a few candidate chains (approx of get_best_paths)
+  function rankPaths(goalsSet){
+    const results=[]; const MAX_DEPTH=5; const startKnown=new Set([...known]);
+    function dfs(currentKnown, chain, cost, depth){
+      if ([...goalsSet].every(g=>currentKnown.has(g))){
+        results.push({chain:[...chain], cost}); return;
+      }
+      if (depth>=MAX_DEPTH) return;
+      const options = providers.filter(p=> p.in.every(k=>currentKnown.has(k)) && !currentKnown.has(p.out));
+      for (const p of options){
+        currentKnown.add(p.out); chain.push(p); dfs(currentKnown, chain, cost+p.cost, depth+1); chain.pop(); currentKnown.delete(p.out);
+      }
+    }
+    dfs(startKnown, [], 0, 0);
+    results.sort((a,b)=> a.cost-b.cost);
+    return results.slice(0,5);
+  }
+
+  function buildSuggestions(){
+    suggestTokens = [];
+    const S_nm = forwardSweep();
+    if ([...TARGET].every(g=>S_nm.has(g))) return; // nothing to suggest
+    const missing = new Set();
+    for (const g of TARGET){ if (!S_nm.has(g)) missing.add(g); }
+    // For each missing goal, collect missing prerequisites from its producers
+    const needed = new Set();
+    for (const g of missing){
+      const options = providers.filter(p=>p.out===g);
+      for (const p of options){
+        for (const s of p.in){ if (!S_nm.has(s)) needed.add(s); }
+      }
+    }
+    // Place tokens for tests that yield one of needed symbols
+    for (const t of tests){
+      if (!needed.has(t.yields)) continue;
+      const node = nodeMap[t.yields];
+      if (!node) continue;
+      suggestTokens.push({test:t, x: node.x + 26*dpr, y: node.y - 26*dpr, phase:Math.random()*6.28});
+    }
+  }
+
+  // ---------------- Interaction ----------------
+  const btnReplay = document.getElementById('btnReplay');
+  const btnScenario = document.getElementById('btnScenario');
+  const chipResult = document.getElementById('chipResult');
+
+  btnReplay.addEventListener('click', ()=> startReplay(false));
+  btnScenario.addEventListener('click', ()=> startReplay(true));
+  chipResult.addEventListener('click', ()=> {
+    const steps = plan.length ? plan.map((s,i)=>{
+      const tag = s.type==='provider' ? providers.find(p=>p.id===s.id)?.name||s.id : tests.find(t=>t.id===s.id)?.name||s.id;
+      const dot = s.type==='provider' ? '🟢' : '🟣';
+      return `<code>${i+1}.</code> ${dot} ${tag}`;
+    }).join('<br>') : '—';
+    const goals = [...TARGET].map(id=>nodeMap[id]?.label||id).join(', ');
+    openPanel('Result',
+      goalsMet()? 'Plan found by staged reasoning.' : 'Inference stalled; measurements suggested.',
+      [
+        ['Goals', `<code>${goals}</code>`],
+        ['Steps', steps]
+      ]);
+  });
+
+  // Click picking
+  canvas.addEventListener('click', (ev)=>{
+    const pt = screenToCanvas(ev.clientX, ev.clientY);
+    // symbols
+    const hitNode = symbols.find(s => Math.hypot(s.x-pt.x, s.y-pt.y) < 20*dpr);
+    if (hitNode){
+      const isKnown = known.has(hitNode.id);
+      openPanel(`Symbol ${hitNode.label}`,
+        isKnown? 'Known in current state.' : 'Unknown in current state.',
+        [
+          ['Key', `<code>${hitNode.id}</code>`],
+          ['Known?', `<code>${isKnown?'yes':'no'}</code>`],
+          ['Goal?', `<code>${TARGET.has(hitNode.id)?'yes':'no'}</code>`],
+          ['Has value?', `<code>${values[hitNode.id]!==undefined?'yes':'no'}</code>`]
+        ]);
+      return;
+    }
+    // providers (capsules)
+    for (const p of providers){
+      const cap = pGeom.get(p.id)?.capsule; if (!cap) continue;
+      if (Math.hypot(cap.x-pt.x, cap.y-pt.y) < 20*dpr){
+        openPanel('Provider',
+          providers.find(x=>x.id===p.id)?.name || p.id,
+          [
+            ['Type', `<code>${p.kind}</code>`],
+            ['Inputs', `<code>${p.in.map(k=>nodeMap[k].label).join(', ')}</code>`],
+            ['Output', `<code>${nodeMap[p.out].label}</code>`],
+            ['Cost', `<code>${p.cost.toFixed(2)}</code>`]
+          ]);
+        return;
+      }
+    }
+    // measurement tokens
+    for (const tok of suggestTokens){
+      if (Math.hypot(tok.x-pt.x, tok.y-pt.y) < 14*dpr){
+        // inject and resume
+        known.add(tok.test.yields);
+        plan.push({type:'measure', id:tok.test.id});
+        stage = STAGES.SCAN; tStage = performance.now();
+        suggestTokens = [];
+        chipResult.textContent = 'Results: updated';
+        return;
+      }
+    }
+  });
+
+  // Keyboard: Esc to close panel + exit overlay
+  document.addEventListener('keydown', (e)=>{
+    if (e.key==='Escape'){
+      panel.classList.remove('show');
+      try{ window.parent.postMessage({source:'spider-anim', cmd:'exit'}, '*'); }catch(_){}
+    }
+  });
+
+  function screenToCanvas(cx,cy){ const r = canvas.getBoundingClientRect(); return {x:(cx-r.left)*dpr, y:(cy-r.top)*dpr}; }
+
+  // ---------------- Flow control ----------------
+  function startReplay(requireMeas){
+    requireMeasurementsDemo = !!requireMeas;
+    known = makeInitialKnown();
+    plan = [];
+    chosen = null; pulsesT = 0;
+    suggestTokens = [];
+    stage = STAGES.SETUP; tStage = performance.now();
+    chipResult.textContent = 'Results: —';
+    if (requireMeas) showToast('Demo: measurements will be needed');
+
+    // Phase 0 – Algebraic propagation (apply immediately)
+    const algSteps = algebraicPropagate();
+    if (algSteps.length){
+      plan.push(...algSteps); chipResult.textContent = 'Results: algebraic propagation';
+      gTitle.textContent = 'Phase 0 — Algebraic propagation';
+      gBody.innerHTML = 'We exhaustively apply laws and constraints whose inputs are already known. This mirrors <code>_direct_propagate</code>.';
+      gKV.innerHTML = '';
+      algSteps.forEach((s,i)=>{
+        const p = providers.find(pp=>pp.id===s.id);
+        const s1=document.createElement('small'); s1.textContent=`Step ${i+1}`;
+        const s2=document.createElement('span'); s2.innerHTML=`<code>${p.name}</code> — <code>${p.in.join(', ')}</code> → <code>${p.out}</code>`;
+        gKV.appendChild(s1); gKV.appendChild(s2);
+      });
+    } else {
+      gTitle.textContent = 'Phase 0 — Algebraic propagation';
+      gBody.innerHTML = 'No algebraic providers could fire initially.';
+      gKV.innerHTML = '';
+    }
+
+    // SCC hint: if any goals remain unknown and are part of a cycle, explain attempt
+    const unknown = new Set(symbols.map(s=>s.id).filter(k=>!known.has(k)));
+    const sccs = detectSCCs(unknown);
+    const sccHit = sccs.find(set=> [...TARGET].some(g=>set.has(g)));
+    if (sccHit){
+      gTitle.textContent = 'Phase ½ — Detect cycles (SCC)';
+      gBody.innerHTML = `We detect strongly-connected unknowns: <code>${[...sccHit].join(', ')}</code>.<br>In code this calls <code>_strongly_connected_unknown_sets</code>; if present, we attempt a small least-squares solve (<code>_solve_cycle_generic</code>).`;
+    }
+
+    // If still not meeting goals, compute a few candidate paths and show ranking summary
+    if (!goalsMet()){
+      const paths = rankPaths(TARGET);
+      if (paths.length){
+        const list = paths.map((p,i)=>`<code>${i+1}.</code> cost=${p.cost.toFixed(2)} — ${p.chain.map(x=>x.name).join(' → ')}`).join('<br>');
+        gTitle.textContent = 'Phase 1 — Rank possible chains';
+        gBody.innerHTML = 'We enumerate apply-able chains up to a short depth and rank by total static cost. In Python this corresponds to <code>get_best_paths</code>.';
+        gKV.innerHTML = '';
+        const s1=document.createElement('small'); s1.textContent='Top paths';
+        const s2=document.createElement('span'); s2.innerHTML=list || '—';
+        gKV.appendChild(s1); gKV.appendChild(s2);
+      } else {
+        gTitle.textContent = 'Phase 1 — Path search';
+        gBody.innerHTML = 'No feasible chains with current inputs. We will suggest measurements next (like raising <code>UnderdeterminedError</code> with hints).';
+        gKV.innerHTML = '';
+      }
+    }
+  }
+
+  // ---------------- Loop ----------------
+  let last=0;
+  function loop(ts){
+    requestAnimationFrame(loop);
+    const dt = Math.min(0.06, (ts-last)/1000||0.016); last = ts;
+
+    // background fade
+    ctx.save(); ctx.scale(dpr,dpr);
+    ctx.fillStyle='rgba(10,14,24,0.35)'; ctx.fillRect(0,0,W,H);
+    ctx.restore();
+
+    // ring guide
+    ctx.save();
+    ctx.strokeStyle='rgba(42,60,96,0.25)'; ctx.lineWidth=1*dpr;
+    ctx.beginPath(); ctx.arc(CX, CY, Math.min(W,H)*0.33*dpr, 0, Math.PI*2); ctx.stroke();
+    ctx.restore();
+
+    // decide stage transitions
+    const tNow = performance.now();
+    const tElapsed = tNow - tStage;
+
+    // Update progress bar for current stage
+    const dur = DUR[stage.replace(/_.+$/,'')] || DUR[stage] || 800;
+    const pct = Math.max(0, Math.min(1, tElapsed / dur));
+    if (gProg) gProg.style.width = `${(pct*100).toFixed(1)}%`;
+
+    if (stage===STAGES.SETUP && tElapsed > DUR.SETUP){ stage = STAGES.SCAN; tStage = tNow; }
+    else if (stage===STAGES.SCAN && tElapsed > DUR.SCAN){
+      const F = frontierNow();
+      if (F.length){ stage = STAGES.CHOOSE; tStage = tNow; }
+      else { stage = STAGES.STALL; tStage = tNow; buildSuggestions(); autoSuggestionAt = tNow + 1200; }
+    }
+    else if (stage===STAGES.CHOOSE && tElapsed > DUR.CHOOSE){
+      const F = frontierNow();
+      chosen = chooseMinCost(F) || null;
+      if (chosen){ stage = STAGES.FIRE; tStage = tNow; pulsesT = 0; }
+      else { stage = STAGES.STALL; tStage = tNow; buildSuggestions(); autoSuggestionAt = tNow + 1200; }
+    }
+    else if (stage===STAGES.FIRE){
+      pulsesT = Math.min(1, (tElapsed)/DUR.FIRE);
+      if (pulsesT>=1){
+        // commit
+        known.add(chosen.out);
+        plan.push({type:'provider', id:chosen.id});
+        chipResult.textContent = 'Results: progress';
+        stage = STAGES.CHECK; tStage = tNow;
+      }
+    }
+    else if (stage===STAGES.CHECK && tElapsed > DUR.CHECK){
+      if (goalsMet()){ stage = STAGES.SUCCESS; tStage = tNow; chipResult.textContent = 'Results: plan found'; }
+      else { stage = STAGES.SCAN; tStage = tNow; }
+    }
+    else if (stage===STAGES.STALL && tElapsed > DUR.STALL){
+      stage = STAGES.SUGGEST; tStage = tNow;
+    }
+    else if (stage===STAGES.SUGGEST){
+      // optional auto demo: take first token after 1.2s if user doesn’t click
+      if (suggestTokens.length && tNow > autoSuggestionAt){
+        const tok = suggestTokens[0];
+        known.add(tok.test.yields);
+        plan.push({type:'measure', id:tok.test.id});
+        suggestTokens = [];
+        chipResult.textContent = 'Results: updated';
+        stage = STAGES.SCAN; tStage = tNow;
+      }
+    }
+    else if (stage===STAGES.SUCCESS && tElapsed > DUR.SUCCESS){
+      stage = STAGES.IDLE;
+      gTitle.textContent = 'SUCCESS — Goals satisfied';
+      gBody.innerHTML = 'The chain reached all requested goals. This mirrors the early return in <code>solve</code> when goals ⊆ ctx.';
+      gKV.innerHTML = '';
+      if (gProg) gProg.style.width = '100%';
+    }
+
+    // draw providers (dim)
+    for (const p of providers){ drawProviderLines(p, 'dim'); }
+
+    // highlight frontier — Guide: Phase SCAN / CHOOSE / FIRE / CHECK
+    const Fnow = frontierNow();
+    for (const p of Fnow){ drawProviderLines(p, 'frontier'); }
+
+    if (stage===STAGES.SCAN){
+      gTitle.textContent = 'Phase SCAN — Build frontier';
+      gBody.innerHTML = 'We gather providers whose inputs are known and outputs are missing. This matches the provider filter before trying to plan.';
+      gKV.innerHTML = '';
+      const s1=document.createElement('small'); s1.textContent='Frontier';
+      const s2=document.createElement('span'); s2.innerHTML = Fnow.length ? Fnow.map(p=>`<code>${p.name}</code>`).join(', ') : '—';
+      gKV.appendChild(s1); gKV.appendChild(s2);
+    }
+    if (stage===STAGES.CHOOSE){
+      gTitle.textContent = 'Phase CHOOSE — Pick lowest cost';
+      gBody.innerHTML = 'From the frontier, choose the provider with the smallest cost (proxy for priority).';
+      gKV.innerHTML = '';
+    }
+    if (stage===STAGES.FIRE && chosen){
+      gTitle.textContent = 'Phase FIRE — Apply chosen provider';
+      gBody.innerHTML = `Applying <code>${chosen.name}</code>: <code>${chosen.in.join(', ')}</code> → <code>${chosen.out}</code>.`;
+      gKV.innerHTML = '';
+    }
+    if (stage===STAGES.CHECK){
+      gTitle.textContent = 'Phase CHECK — Goals met?';
+      gBody.innerHTML = `Goals: <code>${[...TARGET].join(', ')}</code>. If unmet, we loop back to SCAN; else SUCCESS.`;
+      gKV.innerHTML = '';
+    }
+
+    // chosen pulse
+    if (stage===STAGES.FIRE && chosen){
+      drawProviderLines(chosen, 'chosen');
+      drawPulseAlong(chosen, pulsesT);
+    }
+
+    // draw capsules
+    for (const p of providers){
+      const style =
+        (stage===STAGES.FIRE && chosen && p.id===chosen.id) ? 'chosen' :
+        (Fnow.includes(p) ? 'frontier' : 'dim');
+      drawProviderCapsule(p, style);
+    }
+
+    // draw nodes on top
+    for (const s of symbols){
+      drawNode(s, known.has(s.id), TARGET.has(s.id));
+    }
+
+    // SCAN sweep arc (visual cue)
+    if (stage===STAGES.SCAN){
+      const sweep = (tElapsed / DUR.SCAN) * Math.PI*2;
+      ctx.save();
+      ctx.strokeStyle='rgba(255,240,180,0.35)'; ctx.lineWidth=3*dpr;
+      ctx.beginPath(); ctx.arc(CX, CY, Math.min(W,H)*0.36*dpr, -Math.PI/2, -Math.PI/2 + sweep); ctx.stroke();
+      ctx.restore();
+    }
+
+    // measurement suggestion tokens
+    if (stage===STAGES.SUGGEST || stage===STAGES.STALL){
+      for (const tok of suggestTokens){
+        tok.phase += dt*2.0;
+        const y = tok.y - 4*dpr*Math.sin(tok.phase);
+        // glow
+        const g = ctx.createRadialGradient(tok.x,y,0, tok.x,y, 16*dpr);
+        g.addColorStop(0, 'hsla(280,100%,75%,0.9)'); g.addColorStop(1, 'hsla(280,100%,75%,0)');
+        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(tok.x,y,16*dpr,0,Math.PI*2); ctx.fill();
+        // core
+        ctx.fillStyle = 'rgba(18,12,40,0.95)';
+        ctx.beginPath(); ctx.arc(tok.x,y, 6*dpr, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = 'rgba(130,110,200,0.9)'; ctx.lineWidth=1*dpr;
+        ctx.beginPath(); ctx.arc(tok.x,y, 6*dpr, 0, Math.PI*2); ctx.stroke();
+      }
+    }
+
+    // success halo
+    if (stage===STAGES.SUCCESS || stage===STAGES.IDLE){
+      const pulse = 0.5 + 0.5*Math.sin((tElapsed||0)/400);
+      for (const g of TARGET){
+        const s = nodeMap[g];
+        const R=30*dpr + 6*dpr*pulse;
+        const col='150,100%,70%';
+        const gr=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,R);
+        gr.addColorStop(0, `hsla(${col},0.6)`); gr.addColorStop(1, `hsla(${col},0)`);
+        ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(s.x,s.y,R,0,Math.PI*2); ctx.fill();
+      }
+    }
+  }
+  requestAnimationFrame(loop);
+
+  // ---------------- Init ----------------
+  function init(){
+    resize();
+    startReplay(false); // autoplay the clean, solvable case
+  }
+  if (document.readyState==='complete' || document.readyState==='interactive') init();
+  else window.addEventListener('DOMContentLoaded', init, {once:true});
+})();
+</script>
+</body>
+</html>

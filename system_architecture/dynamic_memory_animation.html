@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Spider — Dynamic Memory Demo | AI Learning & Human Feedback System</title>
+<meta name="description" content="Interactive demonstration of Spider's dynamic memory system. Watch how AI learning and human feedback adjust provider priorities in real-time, causing them to move between decision-making tiers.">
+<meta name="keywords" content="artificial intelligence, machine learning, reinforcement learning, decision hierarchy, adaptive systems, human-AI collaboration, intelligent systems, dynamic optimization">
+<meta name="theme-color" content="#0b0f1a"/>
+<style>
+  :root{
+    --bg0:#0b0f1a; --bg1:#101a2f; --ink:#e8efff; --muted:#9eb0d7;
+    --t0:#8ef5c0;  /* Tier 0: exact */
+    --t1:#b49cff;  /* Tier 1: numerical & empirical */
+    --t2:#ffae7a;  /* Tier 2: lookup/charts */
+    --t3:#7fd1ff;  /* Tier 3: practitioner */
+    --rl:#79f2a1;  /* RL beam */
+    --hf:#ffd36c;  /* Human feedback beam */
+  }
+  html,body{height:100%;margin:0; background:radial-gradient(1200px 800px at 50% 18%, var(--bg1) 0%, var(--bg0) 58%, #090e18 100%); color:var(--ink); font:14px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial; overflow:hidden}
+  .stage{position:fixed; inset:0}
+  canvas{position:absolute; inset:0; width:100vw; height:100vh; display:block; background:transparent}
+
+  /* Right info panel (appears only on click) */
+  .panel{position:fixed; right:12px; top:12px; width:min(400px, 42vw); max-height:calc(100vh - 24px); overflow:auto;
+    background:rgba(15,22,36,.94); border:1px solid #263858; border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,.55);
+    padding:12px; display:none}
+  .panel.show{display:block}
+  .panel h3{margin:0 0 6px; font:700 16px/1.2 ui-sans-serif}
+  .panel p{margin:0 8px 10px 0; color:#cfe3ff}
+  .panel .micro{font-size:12px; color:var(--muted)}
+  .panel .kv{display:grid; grid-template-columns:auto 1fr; gap:4px 10px; font-size:12px}
+  .panel .kv code{background:rgba(28,40,70,.6); padding:2px 4px; border-radius:5px}
+  .btnrow{display:flex; gap:8px; margin-top:12px}
+  .explanation-section{background:linear-gradient(135deg, rgba(30,41,59,0.6), rgba(15,23,42,0.4)); border:1px solid rgba(96,165,250,0.3); border-radius:8px; padding:12px; margin-top:12px}
+  .btn{background:rgba(13,20,36,.9); color:#cfe3ff; border:1px solid #24304c; border-radius:8px; padding:6px 10px; cursor:pointer; font:600 12px/1.2 ui-sans-serif}
+  .btn:focus{outline:2px solid #6aaeff; outline-offset:2px}
+  .close{position:absolute; right:8px; top:8px; border:0; background:transparent; color:#bcd1ff; cursor:pointer; font:900 18px/1 ui-sans-serif}
+
+  /* Enhanced legend */
+  .legend{position:fixed; left:12px; top:12px; display:flex; flex-direction:column; gap:8px; background:rgba(12,18,32,.9); border:1px solid rgba(60,90,140,.6); border-radius:12px; padding:12px; backdrop-filter:saturate(1.05) blur(6px); pointer-events:none; max-width:200px}
+  .legend-section{display:flex; flex-direction:column; gap:4px;}
+  .tag{display:inline-flex; align-items:center; gap:6px; font:600 11px ui-sans-serif; padding:3px 6px; border-radius:12px; border:1px solid rgba(60,90,140,.5); background:rgba(16,24,40,.6); white-space:nowrap}
+  .dot{width:8px; height:8px; border-radius:50%}
+  .d-t0{background:var(--t0)} .d-t1{background:var(--t1)} .d-t2{background:var(--t2)} .d-t3{background:var(--t3)}
+  .d-rl{background:var(--rl)} .d-hf{background:var(--hf)}
+
+  .toast{position:fixed; left:50%; transform:translateX(-50%); top:12px; font:600 12px ui-sans-serif; color:#cfe3ff; opacity:0; transition:opacity .35s ease}
+  .hint{position:fixed; right:12px; bottom:12px; font:600 11px ui-sans-serif; color:var(--muted); opacity:.7}
+
+  /* Enhanced hover cursor styles */
+  .hover-provider{cursor:pointer !important}
+  .hover-tier{cursor:pointer !important}
+  .hover-icon{cursor:pointer !important}
+
+  @media (max-width: 900px){ .legend{display:none} .hint{display:none} }
+</style>
+</head>
+<body>
+<div class="stage">
+  <canvas id="fx"></canvas>
+  <!-- Enhanced legend with descriptions -->
+  <div class="legend" aria-hidden="true">
+    <div class="legend-section">
+      <h4 style="margin:0 0 8px 0; color:#60a5fa; font-size:11px;">Decision Tiers</h4>
+      <span class="tag"><i class="dot d-t0"></i>T0: Laws</span>
+      <span class="tag"><i class="dot d-t1"></i>T1: Science</span>
+      <span class="tag"><i class="dot d-t2"></i>T2: Charts</span>
+      <span class="tag"><i class="dot d-t3"></i>T3: Experience</span>
+    </div>
+    <div class="legend-section" style="margin-top:12px;">
+      <h4 style="margin:0 0 8px 0; color:#34d399; font-size:11px;">Feedback Sources</h4>
+      <span class="tag"><i class="dot d-rl"></i>AI Learning</span>
+      <span class="tag"><i class="dot d-hf"></i>Human Input</span>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+      <div class="hint">
+    🎯 <strong>Hover</strong> providers for glow effect • 🧠 <strong>Hover</strong> brain for RL feedback • 👤 Human feedback auto-runs • <strong>R</strong> reset • <strong>Esc</strong> close
+    <br><small style="opacity:0.7;">Demo: Actual system would have hundreds of providers per tier</small>
+  </div>
+</div>
+
+<!-- Right info panel (on demand) -->
+<aside id="panel" class="panel" role="dialog" aria-modal="false">
+  <button class="close" title="Close">×</button>
+  <h3 id="pTitle">—</h3>
+  <p id="pBody"></p>
+  <div class="kv" id="pKV"></div>
+  <div class="btnrow">
+    <button id="btnReward" class="btn">👍 Reward</button>
+    <button id="btnPenalize" class="btn">👎 Penalize</button>
+  </div>
+  <div class="explanation-section">
+    <h4 style="margin:0 0 8px 0; color:#60a5fa; font-size:14px;">How It Works</h4>
+    <p style="margin:0 0 8px 0; line-height:1.4;">
+      Each provider has a "cost score" that determines its position in the decision hierarchy.
+      <strong>Lower cost = higher priority</strong> in the decision-making process.
+    </p>
+    <p style="margin:0 0 8px 0; line-height:1.4;">
+      <strong>AI Learning (🧠)</strong> automatically adjusts costs based on performance feedback.
+      <strong>Human Input (👤)</strong> allows manual reward/penalty adjustments.
+    </p>
+    <p style="margin:0; color:#fbbf24; font-weight:600;">
+      ⚠️ <strong>Important:</strong> The top tier (T0) contains fundamental laws of physics and cannot be changed.
+    </p>
+  </div>
+</aside>
+
+<script>
+(function(){
+  const TAU = Math.PI*2;
+  const canvas = document.getElementById('fx');
+  const ctx = canvas.getContext('2d');
+  const panel = document.getElementById('panel');
+  const pTitle = document.getElementById('pTitle');
+  const pBody  = document.getElementById('pBody');
+  const pKV    = document.getElementById('pKV');
+  const btnReward = document.getElementById('btnReward');
+  const btnPenalize = document.getElementById('btnPenalize');
+  panel.querySelector('.close').addEventListener('click', ()=> panel.classList.remove('show'));
+
+  let dpr = Math.max(1, Math.min(2.5, window.devicePixelRatio||1));
+  let W=0,H=0;
+  function resize(){
+    const rect = canvas.getBoundingClientRect();
+    W = Math.max(1, Math.floor((rect.width||window.innerWidth||800)));
+    H = Math.max(1, Math.floor((rect.height||window.innerHeight||600)));
+    canvas.width  = Math.max(1, Math.floor(W*dpr));
+    canvas.height = Math.max(1, Math.floor(H*dpr));
+    buildTiers();
+    updateTargets();
+    layoutIcons();
+  }
+  window.addEventListener('resize', resize, {passive:true});
+
+  // Global controls
+  let c = 0.40; // exploration weight for UCB
+  let N = 1;    // total selections
+  let RL_ON = true;
+  let ETA = 0.06; // RL learning rate affecting Δπ (reward lowers cost)
+  // Human autopulse controls
+  let HUMAN_ON = true;
+  let HUMAN_PERIOD = 2400; // ms
+  let lastHumanAuto = 0;
+
+  const toast = document.getElementById('toast');
+  function showToast(t){ toast.textContent=t; toast.style.opacity='1'; clearTimeout(showToast._t); toast._t=setTimeout(()=>toast.style.opacity='0', 1200); }
+
+  // Mouse tracking & cursor
+  let mouse = {x:0,y:0};
+  window.addEventListener('mousemove', (e)=>{ const r=canvas.getBoundingClientRect(); mouse.x=(e.clientX-r.left)*dpr; mouse.y=(e.clientY-r.top)*dpr; hoverCheck(); }, {passive:true});
+
+  // ---- Tiers (vertical hierarchy based on initial static cost π0) ----
+  // Tier 0 is immutable (exact closed‑form); a protective WALL prevents entry.
+  let tiers = [];
+  function buildTiers(){
+    const R = Math.min(W,H);
+    tiers = [
+      { id:'exact',  y: H*0.20, r: R*0.070, color:'150,100%,60%', label:'T0', lock:true },      // closed‑form, exact
+      { id:'numemp', y: H*0.42, r: R*0.100, color:'280,100%,60%', label:'T1' },                 // numerical & empirical
+      { id:'lookup', y: H*0.64, r: R*0.132, color:'20,100%,60%',  label:'T2' },                 // lookup tables & charts
+      { id:'pract',  y: H*0.84, r: R*0.160, color:'200,100%,60%', label:'T3' }                  // practitioner
+    ];
+  }
+  function tierOf(id){ return tiers.find(t=>t.id===id) || tiers[0]; }
+
+  // Generic providers (demonstration examples)
+  const providers = [
+    // T0 — closed‑form exact (π0=0, immutable)
+    { id:'provider_t0_01', base:'exact',  tier:'exact',  pi0:0,    dpi:0, n:1, hf:0, rl:0, lastDelta:0 },
+    { id:'provider_t0_02', base:'exact',  tier:'exact',  pi0:0,    dpi:0, n:1, hf:0, rl:0, lastDelta:0 },
+    { id:'provider_t0_03', base:'exact',  tier:'exact',  pi0:0,    dpi:0, n:1, hf:0, rl:0, lastDelta:0 },
+
+    // T1 — numerical & empirical
+    { id:'provider_t1_01', base:'numemp', tier:'numemp', pi0:0.95, dpi:0, n:1, hf:0, rl:0, lastDelta:0 },
+    { id:'provider_t1_02', base:'numemp', tier:'numemp', pi0:0.90, dpi:0, n:1, hf:0, rl:0, lastDelta:0 },
+    { id:'provider_t1_03', base:'numemp', tier:'numemp', pi0:1.00, dpi:0, n:1, hf:0, rl:0, lastDelta:0 },
+    { id:'provider_t1_04', base:'numemp', tier:'numemp', pi0:1.05, dpi:0, n:1, hf:0, rl:0, lastDelta:0 },
+    { id:'provider_t1_05', base:'numemp', tier:'numemp', pi0:1.40, dpi:0, n:1, hf:0, rl:0, lastDelta:0 },
+    { id:'provider_t1_06', base:'numemp', tier:'numemp', pi0:1.50, dpi:0, n:1, hf:0, rl:0, lastDelta:0 },
+
+    // T2 — lookup tables & charts
+    { id:'provider_t2_01', base:'lookup', tier:'lookup', pi0:1.10, dpi:0, n:1, hf:0, rl:0, lastDelta:0 },
+    { id:'provider_t2_02', base:'lookup', tier:'lookup', pi0:1.12, dpi:0, n:1, hf:0, rl:0, lastDelta:0 },
+    { id:'provider_t2_03', base:'lookup', tier:'lookup', pi0:1.15, dpi:0, n:1, hf:0, rl:0, lastDelta:0 },
+
+    // T3 — practitioner
+    { id:'provider_t3_01', base:'pract', tier:'pract',  pi0:1.20, dpi:0, n:1, hf:0, rl:0, lastDelta:0 },
+    { id:'provider_t3_02', base:'pract', tier:'pract',  pi0:1.25, dpi:0, n:1, hf:0, rl:0, lastDelta:0 }
+  ];
+
+  // Orb instances (with dynamic tier movement state)
+  const orbs = providers.map((p,i)=>({
+    p,
+    angle:(i%6)/6*TAU + Math.random()*0.6,
+    baseSpeed: 0.10 + Math.random()*0.10,
+    r:0, rTarget:0, speed:0.15,
+    y:0, yTarget:0,
+    burst:0,
+    levelS: tierIndex(p.tier),
+    wander: Math.random()*TAU,
+    lastSel: performance.now() - Math.random()*5000 // randomize start
+  }));
+
+  // Influence beams (visualize RL/Human causes)
+  const beams = []; // {x0,y0,x1,y1,color,life}
+  function addBeam(x0,y0,x1,y1,color){ beams.push({x0,y0,x1,y1,color,life:1}); }
+
+  function tierIndex(id){ return id==='exact'?0 : id==='numemp'?1 : id==='lookup'?2 : 3; }
+  function idxToTier(i){ return ['exact','numemp','lookup','pract'][Math.max(0,Math.min(3,Math.round(i)))]; }
+
+  // Cost model (includes inactivity penalty and random drift)
+  function pi_ucb(p, extraPenalty=0){
+    if (p.tier==='exact') return 1e-4; // immutably near-zero
+    const denom = 1 + c * Math.sqrt( (2*Math.log(Math.max(2,N))) / Math.max(1,p.n) );
+    return (p.pi0 + p.dpi + extraPenalty) / denom;
+  }
+
+  // Dynamic level thresholds (by π_ucb)
+  const TH12 = 1.08;  // <= → Tier 1
+  const TH23 = 1.22;  // <= → Tier 2, else Tier 3
+
+  function computeDynLevel(o){
+    if (o.p.base==='exact') return 0; // never moves into/above T0
+    const now = performance.now();
+    const inactiveSec = Math.max(0, (now - o.lastSel)/1000);
+    const penalty = Math.min(0.25, inactiveSec*0.005); // grows with inactivity (up to +0.25)
+    const v = pi_ucb(o.p, penalty);
+    let target = (v <= TH12) ? 1 : (v <= TH23) ? 2 : 3;
+    // Smooth with inertia to allow rises and drops
+    o.levelS = o.levelS*0.85 + target*0.15;
+    const lvl = Math.round(o.levelS);
+    return Math.max(1, Math.min(3, lvl));
+  }
+
+  function updateTargets(){
+    // target ring radius & vertical target from dynamic level
+    for (const o of orbs){
+      const lvl = computeDynLevel(o);
+      const tid = idxToTier(lvl);
+      const T = tierOf(tid);
+      o.p.tier = tid; // live tier
+      o.yTarget = T.y*dpr;
+
+      if (tid==='exact'){ o.rTarget = T.r*dpr*0.80; o.speed=0.22; continue; }
+      // Peer-based normalization
+      const peers = orbs.filter(q=> q.p.tier===tid);
+      let min=Infinity, max=-Infinity; for (const q of peers){ const v=pi_ucb(q.p); if(v<min)min=v; if(v>max)max=v; }
+      const v = pi_ucb(o.p), t = (v - min)/Math.max(1e-6,(max-min));
+      // wander adds subtle randomness so movement isn't perfectly circular
+      const wanderR = 0.02*Math.sin(o.wander);
+      o.rTarget = T.r*dpr*(0.70 + 0.48*t + wanderR);
+      o.speed   = o.baseSpeed + (1-t)*0.22; // baseline per-orb + better → faster
+    }
+  }
+
+  // --- Icons for Human (top-right) and RL (bottom-left) ---
+  const icons = {
+    human:{ x:0, y:0, r:18, hover:false },
+    rl:{ x:0, y:0, r:18, hover:false }
+  };
+  function layoutIcons(){
+    icons.human.x = (W - 46)*dpr; icons.human.y = 42*dpr;
+    icons.rl.x    = 46*dpr;       icons.rl.y    = (H - 46)*dpr;
+  }
+  function drawHumanIcon(){
+    const {x,y,r,hover} = icons.human;
+    const glow = hover ? 1.2 : 0.8;
+    const scale = hover ? 1.1 : 1.0;
+
+    const g = ctx.createRadialGradient(x,y,0, x,y, r*3*scale);
+    g.addColorStop(0, `rgba(255,211,108,${0.35*glow})`);
+    g.addColorStop(1, 'rgba(255,211,108,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,r*3*scale,0,TAU); ctx.fill();
+
+    ctx.fillStyle='rgba(20,24,36,0.85)'; ctx.beginPath(); ctx.arc(x,y,(r+6)*scale,0,TAU); ctx.fill();
+    ctx.strokeStyle= hover ? 'rgba(255,211,108,0.9)' : 'rgba(60,90,140,0.9)';
+    ctx.lineWidth=(hover ? 2 : 1)*dpr; ctx.beginPath(); ctx.arc(x,y,(r+6)*scale,0,TAU); ctx.stroke();
+
+    ctx.fillStyle='rgba(255,211,108,0.95)';
+    ctx.beginPath(); ctx.arc(x,y-5*dpr*scale,6*dpr*scale,0,TAU); ctx.fill();
+    ctx.beginPath(); const w=14*dpr*scale; ctx.moveTo(x-w/2,y+2*dpr); ctx.quadraticCurveTo(x,y+8*dpr, x+w/2,y+2*dpr); ctx.lineTo(x+w/2,y+2*dpr); ctx.closePath(); ctx.fill();
+
+    ctx.fillStyle= hover ? '#ffffff' : '#eaf3ff';
+    ctx.font=`${(hover ? 11 : 10)*dpr}px ui-sans-serif`; ctx.textAlign='center';
+    ctx.fillText('Human', x, y+r*scale+12*dpr);
+  }
+  function drawRLIcon(){
+    const {x,y,r,hover} = icons.rl;
+    const glow = hover ? 1.2 : 0.8;
+    const scale = hover ? 1.1 : 1.0;
+
+    const g = ctx.createRadialGradient(x,y,0, x,y, r*3*scale);
+    g.addColorStop(0, `rgba(121,242,161,${0.35*glow})`);
+    g.addColorStop(1, 'rgba(121,242,161,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,r*3*scale,0,TAU); ctx.fill();
+
+    ctx.fillStyle='rgba(20,24,36,0.85)'; ctx.beginPath(); ctx.arc(x,y,(r+6)*scale,0,TAU); ctx.fill();
+    ctx.strokeStyle= hover ? 'rgba(121,242,161,0.9)' : 'rgba(60,90,140,0.9)';
+    ctx.lineWidth=(hover ? 2 : 1)*dpr; ctx.beginPath(); ctx.arc(x,y,(r+6)*scale,0,TAU); ctx.stroke();
+
+    ctx.fillStyle='rgba(121,242,161,0.95)';
+    const s=14*dpr*scale; const x0=x-s/2, y0=y-s/2; ctx.fillRect(x0,y0,s,s);
+    for(let i=0;i<4;i++){
+      ctx.fillRect(x0-3*dpr*scale, y0+2*dpr+i*4*dpr*scale, 3*dpr*scale,2*dpr*scale);
+      ctx.fillRect(x0+s, y0+2*dpr+i*4*dpr*scale, 3*dpr*scale,2*dpr*scale);
+    }
+
+    ctx.fillStyle= hover ? '#ffffff' : '#eaf3ff';
+    ctx.font=`${(hover ? 11 : 10)*dpr}px ui-sans-serif`; ctx.textAlign='center';
+    ctx.fillText('RL', x, y+r*scale+12*dpr);
+  }
+
+  function withinIcon(icon, x, y){ return Math.hypot(x-icon.x, y-icon.y) <= (icon.r+10)*dpr; }
+  function hoverCheck(){
+    icons.human.hover = withinIcon(icons.human, mouse.x, mouse.y);
+    icons.rl.hover    = withinIcon(icons.rl,    mouse.x, mouse.y);
+    const hitOrb = pickOrb(mouse.x, mouse.y);
+    const hitTier = pickTier(mouse.x, mouse.y);
+
+    // Enhanced cursor feedback
+    if (icons.rl.hover || icons.human.hover) {
+      canvas.style.cursor = 'pointer';
+      canvas.className = 'hover-icon';
+    } else if (hitOrb) {
+      canvas.style.cursor = 'pointer';
+      canvas.className = 'hover-provider';
+    } else if (hitTier) {
+      canvas.style.cursor = 'pointer';
+      canvas.className = 'hover-tier';
+    } else {
+      canvas.style.cursor = 'default';
+      canvas.className = '';
+    }
+  }
+
+  // Interaction
+  canvas.addEventListener('click', (ev)=>{
+    const pt = screenToCanvas(ev.clientX, ev.clientY);
+    if (withinIcon(icons.rl, pt.x, pt.y)){
+      const o = chooseCandidateForRL();
+      if (o){ const reward = (Math.random()*2-1); applyRL(o, reward); select(o,false); showToast('RL pulse'); }
+      openPanel('Reinforcement learning', 'RL pulses adjust Δπ based on reward signals. Use [ ] to change η or L to toggle streaming.', []);
+      return;
+    }
+
+    const hit = pickOrb(pt.x, pt.y);
+    if (hit){ select(hit, true); return; }
+    const T = pickTier(pt.x, pt.y);
+    if (T){ explainTier(T.id); return; }
+  });
+  canvas.addEventListener('wheel', (ev)=>{
+    if (ev.altKey){ ev.preventDefault(); const dir = Math.sign(ev.deltaY); c = Math.max(0, Math.min(1.2, +(c + dir*0.05).toFixed(2))); showToast(`exploration c = ${c.toFixed(2)}`); updateTargets(); return; }
+  }, {passive:false});
+  window.addEventListener('keydown', (e)=>{
+    if (e.key==='Escape'){ panel.classList.remove('show'); try{ window.parent.postMessage({source:'spider-anim', cmd:'exit'}, '*'); }catch(_){} }
+    if (e.key==='r' || e.key==='R'){ N=1; providers.forEach(p=>{ p.n=1; p.dpi=0; p.hf=0; p.rl=0; p.lastDelta=0; }); for(const o of orbs){o.lastSel=performance.now()-Math.random()*5000;} showToast('Reset'); updateTargets(); }
+    if (e.key==='l' || e.key==='L'){ RL_ON=!RL_ON; showToast(`RL ${RL_ON? 'on':'off'}`); }
+    if (e.key===']'){ ETA = Math.min(0.25, +(ETA+0.01).toFixed(2)); showToast(`RL η = ${ETA.toFixed(2)}`); }
+    if (e.key==='['){ ETA = Math.max(0.00, +(ETA-0.01).toFixed(2)); showToast(`RL η = ${ETA.toFixed(2)}`); }
+  });
+
+  btnReward.addEventListener('click', ()=>{ if(currentOrb){ applyHuman(currentOrb, -0.08); select(currentOrb,false);} });
+  btnPenalize.addEventListener('click', ()=>{ if(currentOrb){ applyHuman(currentOrb, +0.08); select(currentOrb,false);} });
+
+  function select(o, showPanel){ if (!o) return; o.p.n+=1; N+=1; o.burst=1; o.lastSel=performance.now(); updateTargets(); if (showPanel) explainProvider(o.p); }
+  function pickOrb(x,y){ for (const o of orbs){ const pt=orbPos(o); if (dist(x,y,pt.x,pt.y) < 16*dpr) return o; } return null; }
+  function nearestOrb(x,y){ let best=null,bd=1e9; for (const o of orbs){ const pt=orbPos(o); const d=dist(x,y,pt.x,pt.y); if(d<bd){bd=d;best=o;} } return best; }
+  function pickTier(x,y){ for (const T of tiers){ const cx=W*0.5*dpr, cy=T.y*dpr, rr=T.r*dpr*1.35; const d=Math.hypot(x-cx,y-cy); if(d<rr) return T; } return null; }
+  function dist(x1,y1,x2,y2){ const dx=x1-x2, dy=y1-y2; return Math.hypot(dx,dy); }
+  function screenToCanvas(cx,cy){ const r = canvas.getBoundingClientRect(); return {x:(cx-r.left)*dpr, y:(cy-r.top)*dpr}; }
+
+  function orbPos(o){ const cx=(W*0.5)*dpr; return { x: cx + Math.cos(o.angle)*o.r, y: o.y + Math.sin(o.angle)*o.r }; }
+
+  // Right panel explainers (appear only when clicked)
+  let currentOrb = null;
+  function openPanel(title, body, kv){
+    pTitle.textContent = title; pBody.textContent = body; pKV.innerHTML='';
+    if (kv){ for (const [k,v] of kv){ const s1=document.createElement('small'); s1.textContent=k; const s2=document.createElement('span'); s2.innerHTML=v; pKV.appendChild(s1); pKV.appendChild(s2); } }
+    panel.classList.add('show');
+  }
+  function explainTier(id){
+    currentOrb = null;
+    if (id==='exact') openPanel('🏛️ Tier 0 — Physical Laws', 'This tier contains fundamental laws of physics and engineering principles that cannot be changed. These are the immutable "ground truth" that everything else must follow. No provider can enter or exit this tier.', []);
+    else if (id==='numemp') openPanel('🔬 Tier 1 — Scientific Methods', 'Advanced mathematical models and laboratory-tested relationships. These are the most reliable methods for complex calculations. Their position adjusts based on performance feedback.', []);
+    else if (id==='lookup') openPanel('📊 Tier 2 — Design Charts', 'Quick reference tables and design charts for routine engineering tasks. Fast and practical, but less precise than scientific methods.', []);
+    else if (id==='pract') openPanel('🛠️ Tier 3 — Field Experience', 'Practical rules and heuristics based on engineering experience. These can improve with feedback but provide the least theoretical certainty.', []);
+  }
+  function explainProvider(p){
+    const tierName = p.tier==='exact' ? '🏛️ Tier 0 — Physical Laws' : p.tier==='numemp' ? '🔬 Tier 1 — Scientific Methods' : p.tier==='lookup' ? '📊 Tier 2 — Design Charts' : '🛠️ Tier 3 — Field Experience';
+    const tierNumber = p.tier==='exact' ? '0' : p.tier==='numemp' ? '1' : p.tier==='lookup' ? '2' : '3';
+    currentOrb = orbs.find(o=>o.p===p) || null;
+
+    // Generic provider description for demonstration
+    let description = '';
+    if (p.tier === 'exact') {
+      description = `This is a demonstration provider that belongs to <strong>Tier ${tierNumber}</strong> (${tierName.split('—')[1].trim()}). It represents fundamental physical laws and mathematical principles that cannot be changed or moved between tiers. In the actual system, this tier would contain many more immutable providers representing core engineering principles.`;
+    } else {
+      const costChange = p.dpi > 0 ? 'increased' : p.dpi < 0 ? 'decreased' : 'unchanged';
+      description = `This is a demonstration provider that belongs to <strong>Tier ${tierNumber}</strong> (${tierName.split('—')[1].trim()}). It has a static cost (π₀) and a dynamic cost (Δπ) that gets adjusted through feedback. Its cost score has ${costChange} due to ${p.rl} AI learning adjustments and ${p.hf} human feedback inputs. In the actual system, each tier would contain hundreds of such providers.`;
+    }
+
+    openPanel('Provider Details', description, [
+      ['Tier', `<strong>Tier ${tierNumber}</strong> — ${tierName.split('—')[1].trim()}`],
+      ['Static Cost (π₀)', `<code>${p.pi0.toFixed(2)}</code> <small>(initial priority)</small>`],
+      ['Dynamic Cost (Δπ)', `<code>${(p.tier==='exact'?'—':p.dpi.toFixed(3))}</code> <small>(adjusted by feedback)</small>`],
+      ['Selection Count', `<code>${p.n.toFixed(0)}</code> <small>(times used)</small>`],
+      ['AI Learning Events', `<code>${p.rl}</code> <small>(reinforcement learning adjustments)</small>`],
+      ['Human Feedback Events', `<code>${p.hf}</code> <small>(manual reward/penalty inputs)</small>`],
+      ['Current Priority Score', `<code>${pi_ucb(p).toFixed(3)}</code> <small>(lower = higher priority)</small>`]
+    ]);
+  }
+
+  // Feedback mechanics
+  function applyHuman(o, delta){
+    if (o.p.tier==='exact') return; // immutable
+    o.p.dpi += delta; o.p.hf += 1; o.p.lastDelta = -delta; // down = good
+    const pt=orbPos(o);
+    addBeam(icons.human.x, icons.human.y, pt.x, pt.y, 'hf');
+    updateTargets();
+  }
+  function applyRL(o, reward){
+    if (!RL_ON || o.p.tier==='exact') return;
+    const delta = -ETA * reward; // positive reward lowers cost
+    o.p.dpi += delta; o.p.rl += 1; o.p.lastDelta = -delta;
+    const pt=orbPos(o);
+    addBeam(icons.rl.x, icons.rl.y, pt.x, pt.y, 'rl');
+    updateTargets();
+  }
+
+  // Draw helpers
+  function roundRect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+  // Main loop with WALL, repulsion, drift and random wander + influence beams
+  let last=0; buildTiers(); updateTargets(); resize();
+  let lastDrift = 0; let lastAuto = 0;
+  (function loop(ts){
+    requestAnimationFrame(loop);
+    const dt = Math.min(0.06, (ts-last)/1000||0.016); last = ts;
+
+    // backdrop fade
+    ctx.save(); ctx.scale(dpr,dpr); ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(10,14,24,0.35)'; ctx.fillRect(0,0,W,H); ctx.restore();
+
+    // draw tiers with hover effects
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let i=0;i<tiers.length;i++){
+      const T = tiers[i];
+      const cx=W*0.5*dpr, cy=T.y*dpr, rr=T.r*dpr;
+      const isHovered = pickTier(mouse.x, mouse.y) === T;
+      const hoverIntensity = isHovered ? 1.3 : 1.0;
+
+      const g = ctx.createRadialGradient(cx,cy, rr*0.4, cx,cy, rr*1.35);
+      g.addColorStop(0, `hsla(${T.color}, ${0.18 * hoverIntensity})`);
+      g.addColorStop(1, `hsla(${T.color}, 0)`);
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx,cy, rr*1.35, 0, TAU); ctx.fill();
+
+      ctx.beginPath();
+      ctx.strokeStyle = `hsla(${T.color}, ${0.26 * hoverIntensity})`;
+      ctx.lineWidth = (isHovered ? 2.4 : 1.2)*dpr;
+      ctx.arc(cx,cy, rr, 0, TAU); ctx.stroke();
+
+      // Enhanced tier label with hover effect
+      const tx = (W-16)*dpr, ty = cy;
+      ctx.fillStyle = `hsla(${T.color}, ${isHovered ? 1.0 : 0.9})`;
+      ctx.font = `${(isHovered ? 14 : 12)*dpr}px ui-sans-serif`;
+      ctx.textAlign='right'; ctx.textBaseline='middle';
+      ctx.fillText(T.label, tx, ty);
+
+      // Add glow effect for hovered tiers
+      if (isHovered) {
+        ctx.strokeStyle = `hsla(${T.color}, 0.4)`;
+        ctx.lineWidth = 3*dpr;
+        ctx.setLineDash([5*dpr, 5*dpr]);
+        ctx.beginPath(); ctx.arc(cx,cy, rr + 8*dpr, 0, TAU); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    // Enhanced WALL between T0 and T1 - making immutability visually obvious
+    (function drawWall(){
+      const T0 = tierOf('exact');
+      const cx=W*0.5*dpr, cy=T0.y*dpr, r=T0.r*dpr*1.18;
+
+      // Outer protective barrier
+      ctx.beginPath(); ctx.lineWidth=8*dpr; ctx.strokeStyle='hsla(150,100%,60%,0.3)'; ctx.arc(cx,cy,r+15*dpr,0,TAU); ctx.stroke();
+
+      // Main luminous ring
+      ctx.beginPath(); ctx.lineWidth=6*dpr; ctx.strokeStyle='hsla(150,100%,70%,0.55)'; ctx.arc(cx,cy,r,0,TAU); ctx.stroke();
+
+      // Animated shield pattern
+      ctx.save(); ctx.setLineDash([8*dpr, 12*dpr]); ctx.lineDashOffset = (ts/20)% (20*dpr);
+      ctx.beginPath(); ctx.lineWidth=4*dpr; ctx.strokeStyle='hsla(150,100%,65%,0.7)'; ctx.arc(cx,cy,r+8*dpr,0,TAU); ctx.stroke();
+      ctx.restore();
+
+      // Add "IMMUTABLE" text indicator
+      ctx.save();
+      ctx.fillStyle='hsla(150,100%,80%,0.8)';
+      ctx.font=`${12*dpr}px ui-sans-serif`;
+      ctx.textAlign='center';
+      ctx.fillText('IMMUTABLE ZONE', cx, cy - r - 20*dpr);
+      ctx.restore();
+    })();
+
+    // animate orbs
+    for (const o of orbs){
+      // wander phase
+      o.wander += dt*(0.6 + Math.random()*0.2);
+      const wobbleY = 6*dpr*Math.sin(o.wander*0.8);
+      // smooth y towards yTarget with wobble
+      o.y += (o.yTarget + wobbleY - o.y) * (1 - Math.pow(0.0001, dt));
+      // angular & radial easing with slight wander in speed
+      const speedJitter = 0.03*Math.sin(o.wander*0.9);
+      o.angle += (o.speed + speedJitter) * dt;
+      const rJitter = 0.02*o.rTarget*Math.sin(o.wander*1.1);
+      o.r += (o.rTarget + rJitter - o.r) * (1 - Math.pow(0.0001, dt));
+
+      let pt = orbPos(o);
+
+      // Repel from WALL radius around T0
+      const T0 = tierOf('exact');
+      const wcx=W*0.5*dpr, wcy=T0.y*dpr, wr=T0.r*dpr*1.18;
+      const d = Math.hypot(pt.x-wcx, pt.y-wcy);
+      if (d < wr + 14*dpr && o.p.tier!=='exact'){ // push away
+        const push = (wr + 14*dpr - d) * 0.25; // penetration depth
+        o.y += ((pt.y-wcy)/Math.max(1e-6,d)) * push;
+        o.r += Math.max(0, push*0.5);
+        pt = orbPos(o);
+      }
+
+      // Enhanced glow + core with hover effects
+      const col = tierOf(o.p.tier).color;
+      const isHovered = pickOrb(mouse.x, mouse.y) === o;
+      const glowSize = isHovered ? 20*dpr : 16*dpr;
+      const coreSize = isHovered ? 5*dpr : 4*dpr;
+
+      const g1 = ctx.createRadialGradient(pt.x,pt.y,0, pt.x,pt.y, glowSize);
+      g1.addColorStop(0, `hsla(${col}, ${isHovered ? 0.95 : 0.90})`);
+      g1.addColorStop(1, `hsla(${col}, 0)`);
+      ctx.fillStyle = g1; ctx.beginPath(); ctx.arc(pt.x,pt.y, glowSize, 0, TAU); ctx.fill();
+
+      // Add extra glow ring for hovered orbs
+      if (isHovered) {
+        const g2 = ctx.createRadialGradient(pt.x,pt.y,0, pt.x,pt.y, 24*dpr);
+        g2.addColorStop(0, `hsla(${col}, 0.3)`);
+        g2.addColorStop(1, 'transparent');
+        ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(pt.x,pt.y, 24*dpr, 0, TAU); ctx.fill();
+      }
+
+      ctx.fillStyle = `hsla(${col}, 0.95)`; ctx.beginPath(); ctx.arc(pt.x,pt.y, coreSize, 0, TAU); ctx.fill();
+
+      // Enhanced selection burst with tier transition effects
+      if (o.burst>0){
+        const br=(1-o.burst)*60*dpr + 18*dpr;
+        ctx.strokeStyle = `hsla(${col}, ${o.burst})`;
+        ctx.lineWidth=2*dpr;
+        ctx.beginPath(); ctx.arc(pt.x,pt.y, br, 0, TAU); ctx.stroke();
+        o.burst=Math.max(0, o.burst - dt*1.2);
+      }
+
+      // Add tier transition indicator
+      if (Math.abs(o.levelS - Math.round(o.levelS)) > 0.1) {
+        // Provider is transitioning between tiers
+        ctx.strokeStyle = `hsla(${col}, 0.8)`;
+        ctx.lineWidth=3*dpr;
+        ctx.setLineDash([5*dpr, 3*dpr]);
+        ctx.beginPath(); ctx.arc(pt.x,pt.y, 22*dpr, 0, TAU); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Enhanced cost chip with better trend indicators
+      const v = pi_ucb(o.p);
+      ctx.save();
+      const label = v<10 ? v.toFixed(2) : String(Math.round(v));
+      const fw = Math.max(42, ctx.measureText(label).width + 30*dpr);
+      const fx = pt.x - fw/2, fy = pt.y - 28*dpr, fh = 18*dpr, rr = 8*dpr;
+
+      // Background with tier-based color tint
+      const bgHue = tierOf(o.p.tier).color.split(',')[0];
+      ctx.fillStyle=`hsla(${bgHue}, 20%, 15%, 0.85)`; roundRect(ctx, fx, fy, fw, fh, rr); ctx.fill();
+      ctx.strokeStyle=`hsla(${bgHue}, 50%, 60%, 0.6)`; ctx.lineWidth=1*dpr; roundRect(ctx, fx, fy, fw, fh, rr); ctx.stroke();
+
+      // Enhanced trend arrow with better visibility
+      if (o.p.lastDelta!==0){
+        const good = o.p.lastDelta > 0; // positive delta means cost increased (bad)
+        ctx.fillStyle = good ? 'hsla(142, 71%, 45%, 0.9)' : 'hsla(0, 84%, 60%, 0.9)';
+        const ax = fx + 6*dpr, ay = fy + fh/2;
+        ctx.beginPath();
+        if (good){
+          // Down arrow (cost decreased = good)
+          ctx.moveTo(ax, ay-3*dpr); ctx.lineTo(ax+5*dpr, ay-3*dpr); ctx.lineTo(ax+2.5*dpr, ay+2*dpr);
+        } else {
+          // Up arrow (cost increased = needs improvement)
+          ctx.moveTo(ax, ay+3*dpr); ctx.lineTo(ax+5*dpr, ay+3*dpr); ctx.lineTo(ax+2.5*dpr, ay-2*dpr);
+        }
+        ctx.closePath(); ctx.fill();
+
+        // Add small indicator text
+        ctx.fillStyle = good ? 'hsla(142, 71%, 75%, 0.9)' : 'hsla(0, 84%, 75%, 0.9)';
+        ctx.font=`${7*dpr}px ui-sans-serif`;
+        ctx.textAlign='left';
+        ctx.fillText(good ? '↓' : '↑', ax + 8*dpr, ay + 2*dpr);
+      }
+
+      // Cost value with better contrast
+      ctx.fillStyle='#ffffff'; ctx.font=`${11*dpr}px ui-sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(label, pt.x, fy + fh/2);
+      ctx.restore();
+    }
+
+    // Enhanced influence beams with better visual feedback
+    for (let i=beams.length-1;i>=0;i--){
+      const b = beams[i];
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+
+      // Create gradient effect for beams
+      const gradient = ctx.createLinearGradient(b.x0, b.y0, b.x1, b.y1);
+      if (b.color==='rl') {
+        gradient.addColorStop(0, `rgba(121,242,161,${b.life.toFixed(2)})`);
+        gradient.addColorStop(1, `rgba(34,197,94,${b.life * 0.5})`);
+      } else {
+        gradient.addColorStop(0, `rgba(255,211,108,${b.life.toFixed(2)})`);
+        gradient.addColorStop(1, `rgba(245,158,11,${b.life * 0.5})`);
+      }
+
+      ctx.strokeStyle = gradient;
+      ctx.lineWidth = 4*dpr*b.life;
+      ctx.beginPath(); ctx.moveTo(b.x0,b.y0); ctx.lineTo(b.x1,b.y1); ctx.stroke();
+
+      // Add animated particles along the beam
+      if (b.life > 0.5) {
+        const particleCount = 3;
+        for (let p = 0; p < particleCount; p++) {
+          const t = (p / particleCount) + (1 - b.life) * 2; // Move particles along beam
+          if (t <= 1) {
+            const px = b.x0 + (b.x1 - b.x0) * t;
+            const py = b.y0 + (b.y1 - b.y0) * t;
+            ctx.fillStyle = b.color==='rl' ? `rgba(121,242,161,${b.life * 0.8})` : `rgba(255,211,108,${b.life * 0.8})`;
+            ctx.beginPath(); ctx.arc(px, py, 2*dpr, 0, TAU); ctx.fill();
+          }
+        }
+      }
+
+      ctx.restore();
+      b.life -= 0.015; if (b.life<=0) beams.splice(i,1);
+    }
+
+    // Draw source icons last so they sit on top
+    drawHumanIcon();
+    drawRLIcon();
+
+    ctx.restore();
+
+    // periodic drift & forgetting (can move up or down)
+    if (ts - lastDrift > 1000){
+      lastDrift = ts;
+      for (const o of orbs){
+        if (o.p.tier==='exact') continue;
+        o.p.dpi += (Math.random()-0.5)*0.02; // random walk on Δπ
+        const inact = Math.max(0, (performance.now()-o.lastSel)/1000);
+        o.p.dpi += Math.min(0.02, inact*0.0015); // inactivity penalty
+        o.p.n = Math.max(1, o.p.n*0.997);       // forgetting
+      }
+      updateTargets();
+    }
+
+    // gentle autopilot RL (does NOT open panel)
+    if (RL_ON && ts - lastAuto > 1600){
+      lastAuto = ts;
+      const o = chooseCandidateForRL();
+      if (o){ const reward = (Math.random()*2-1); applyRL(o, reward); }
+    }
+
+    // automatic Human pulses (no clicking required)
+    if (HUMAN_ON && ts - lastHumanAuto > HUMAN_PERIOD){
+      lastHumanAuto = ts;
+      const o = chooseCandidateForHuman();
+      if (o){
+        const rewardBias = 0.6; // more rewards than penalties
+        const reward = (Math.random() < rewardBias) ? -0.08 : +0.08; // negative lowers cost
+        applyHuman(o, reward);
+      }
+    }
+  })();
+
+  function chooseCandidateForRL(){
+    const candidates = orbs.filter(o=>o.p.tier!=='exact');
+    if (!candidates.length) return null;
+    return candidates[Math.floor(Math.random()*candidates.length)];
+  }
+  function chooseCandidateForHuman(){
+    const candidates = orbs.filter(o=>o.p.tier!=='exact');
+    if (!candidates.length) return null;
+    // 50%: target the orb nearest the mouse; else random
+    if (Math.random() < 0.5){
+      const o = nearestOrb(mouse.x, mouse.y);
+      if (o && o.p.tier!=='exact') return o;
+    }
+    return candidates[Math.floor(Math.random()*candidates.length)];
+  }
+
+  // start
+  if (document.readyState==='complete' || document.readyState==='interactive') resize();
+  else window.addEventListener('DOMContentLoaded', resize, {once:true});
+})();
+</script>
+</body>
+</html>

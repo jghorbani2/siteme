@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Spider — Static Memory | Fixed Cost Provider Registry</title>
+<meta name="description" content="Explore Spider's static memory containing fixed-cost providers with comprehensive meta information including citations, standards, measurement techniques, and technical explanations. See the baseline reliability hierarchy before dynamic adjustments.">
+<style>
+  :root{
+    --bg0:#0b0f1a; --bg1:#101a2f; --ink:#e8efff; --muted:#9eb0d7;
+    --t0:#8ef5c0;  /* Tier 0: exact */
+    --t1:#b49cff;  /* Tier 1: numerical & empirical */
+    --t2:#ffae7a;  /* Tier 2: lookup/charts */
+    --t3:#7fd1ff;  /* Tier 3: practitioner */
+  }
+  html,body{height:100%;margin:0; background:radial-gradient(1200px 800px at 50% 18%, var(--bg1) 0%, var(--bg0) 58%, #090e18 100%); color:var(--ink); font:14px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial; overflow:hidden}
+  .stage{position:fixed; inset:0}
+  canvas{position:absolute; inset:0; width:100vw; height:100vh; display:block; background:transparent}
+
+  /* Right info panel (appears only on click) */
+  .panel{position:fixed; right:12px; top:12px; width:min(400px, 42vw); max-height:calc(100vh - 24px); overflow:auto;
+    background:rgba(15,22,36,.94); border:1px solid #263858; border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,.55);
+    padding:12px; display:none}
+  .panel.show{display:block}
+  .panel h3{margin:0 0 8px; font:700 16px/1.2 ui-sans-serif}
+  .panel p{margin:0 8px 10px 0; color:#cfe3ff}
+  .panel .micro{font-size:12px; color:var(--muted)}
+  .panel .kv{display:grid; grid-template-columns:auto 1fr; gap:4px 10px; font-size:12px}
+  .panel .kv code{background:rgba(28,40,70,.6); padding:2px 4px; border-radius:5px}
+  .close{position:absolute; right:8px; top:8px; border:0; background:transparent; color:#bcd1ff; cursor:pointer; font:900 18px/1 ui-sans-serif}
+
+  /* Enhanced legend */
+  .legend{position:fixed; left:12px; top:12px; display:flex; flex-direction:column; gap:8px; background:rgba(12,18,32,.9); border:1px solid rgba(60,90,140,.6); border-radius:12px; padding:12px; backdrop-filter:saturate(1.05) blur(6px); pointer-events:none; max-width:200px}
+  .legend-section{display:flex; flex-direction:column; gap:4px;}
+  .tag{display:inline-flex; align-items:center; gap:6px; font:600 11px ui-sans-serif; padding:3px 6px; border-radius:12px; border:1px solid rgba(60,90,140,.5); background:rgba(16,24,40,.6); white-space:nowrap}
+  .dot{width:10px; height:10px; border-radius:50%}
+      .d-t0{background:var(--t0)} .d-t1{background:var(--t1)} .d-t2{background:var(--t2)} .d-t3{background:var(--t3)}
+
+  .hint{position:fixed; right:12px; bottom:12px; font:600 11px ui-sans-serif; color:var(--muted); opacity:.7}
+
+  /* Hover tooltip */
+  .tooltip{position:fixed; pointer-events:none; background:rgba(15,23,42,0.95); border:1px solid #374151; border-radius:8px; padding:12px; max-width:300px; font-size:13px; line-height:1.4; z-index:1000; opacity:0; transition:opacity 0.2s ease; backdrop-filter:blur(8px);}
+  .tooltip.show{opacity:1;}
+  .tooltip h4{margin:0 0 8px 0; color:#60a5fa; font-size:14px;}
+  .tooltip p{margin:0 0 6px 0;}
+  .tooltip strong{color:#34d399;}
+
+  @media (max-width: 900px){ .legend{display:none} .hint{display:none} }
+</style>
+</head>
+<body>
+<div class="stage">
+  <canvas id="fx"></canvas>
+  <!-- Enhanced legend with clear tier descriptions -->
+  <div class="legend" aria-hidden="true">
+    <div class="legend-section">
+      <h4 style="margin:0 0 6px 0; color:#60a5fa; font-size:10px;">Decision Tiers</h4>
+      <span class="tag"><i class="dot d-t0"></i>T0: Physical Laws</span>
+      <span class="tag"><i class="dot d-t1"></i>T1: Scientific Methods</span>
+      <span class="tag"><i class="dot d-t2"></i>T2: Design Charts</span>
+      <span class="tag"><i class="dot d-t3"></i>T3: Field Experience</span>
+    </div>
+  </div>
+  <div class="hint">
+    🎯 <strong>Hover</strong> providers or tier bands for information • <strong>Esc</strong> closes
+    <br><small style="opacity:0.7;">Static costs (π₀) never change - unlike dynamic memory</small>
+  </div>
+  <div class="tooltip" id="tooltip"></div>
+</div>
+
+<!-- Right info panel (on demand) -->
+<aside id="panel" class="panel" role="dialog" aria-modal="false">
+  <button class="close" title="Close">×</button>
+  <h3 id="pTitle">—</h3>
+  <p id="pBody"></p>
+  <div class="kv" id="pKV"></div>
+  <p class="micro">
+    <strong>🔒 Static Memory:</strong> Contains only static costs (π₀) that never change.
+    Meta information includes citations, standards, measurement techniques, and technical explanations.
+    <em>Tier 0 is immutable - represents fundamental physical laws.</em>
+  </p>
+</aside>
+
+<script>
+(function(){
+  const TAU = Math.PI*2;
+  const OUTER = 1.30;        // visual band extent multiplier (used for spacing + drawing)
+  const GAP   = 32;          // minimum vertical gap (CSS px) between bands (outer edge to outer edge)
+  const MT    = 40, MB = 40; // top/bottom margins (CSS px)
+
+  const canvas = document.getElementById('fx');
+  const ctx = canvas.getContext('2d');
+  const panel = document.getElementById('panel');
+  const pTitle = document.getElementById('pTitle');
+  const pBody  = document.getElementById('pBody');
+  const pKV    = document.getElementById('pKV');
+  const tooltip = document.getElementById('tooltip');
+  panel.querySelector('.close').addEventListener('click', ()=> panel.classList.remove('show'));
+
+  // Mouse tracking for hover effects
+  let mouse = {x: 0, y: 0, canvasX: 0, canvasY: 0};
+  let hoveredElement = null;
+
+  window.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+    mouse.canvasX = (e.clientX - rect.left) * dpr;
+    mouse.canvasY = (e.clientY - rect.top) * dpr;
+    updateHover();
+  }, {passive: true});
+
+  let dpr = Math.max(1, Math.min(2.5, window.devicePixelRatio||1));
+  let W=0,H=0;
+  function resize(){
+    const rect = canvas.getBoundingClientRect();
+    W = Math.max(1, Math.floor((rect.width||window.innerWidth||800)));
+    H = Math.max(1, Math.floor((rect.height||window.innerHeight||600)));
+    canvas.width  = Math.max(1, Math.floor(W*dpr));
+    canvas.height = Math.max(1, Math.floor(H*dpr));
+    buildTiers();
+    layoutOrbs();
+    draw();
+  }
+  window.addEventListener('resize', resize, {passive:true});
+
+  // Hover detection and tooltip management
+  function updateHover() {
+    let newHoveredElement = null;
+
+    // Check for provider hover
+    for (const orb of orbs) {
+      const dx = mouse.canvasX - orb.x;
+      const dy = mouse.canvasY - orb.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance < 20 * dpr) {
+        newHoveredElement = { type: 'provider', orb: orb };
+        break;
+      }
+    }
+
+    // Check for tier band hover
+    if (!newHoveredElement) {
+      for (const T of tiers) {
+        const cx = W * 0.5 * dpr;
+        const cy = T.y * dpr;
+        const rr = T.r * dpr * OUTER;
+        const distance = Math.sqrt(
+          (mouse.canvasX - cx) ** 2 + (mouse.canvasY - cy) ** 2
+        );
+        if (distance < rr) {
+          newHoveredElement = { type: 'tier', tier: T };
+          break;
+        }
+      }
+    }
+
+    // Update tooltip
+    if (newHoveredElement !== hoveredElement) {
+      hoveredElement = newHoveredElement;
+      updateTooltip();
+    }
+  }
+
+  function updateTooltip() {
+    if (!hoveredElement) {
+      tooltip.classList.remove('show');
+      canvas.className = '';
+      return;
+    }
+
+    let content = '';
+    let tooltipX = mouse.x + 15;
+    let tooltipY = mouse.y - 10;
+
+    switch (hoveredElement.type) {
+      case 'provider':
+        const orb = hoveredElement.orb;
+        const provider = orb.p;
+        const tier = tierOf(provider.tier);
+
+        content = `
+          <h4>📊 ${provider.title}</h4>
+          <p><strong>Tier:</strong> ${tier.name}</p>
+          <p><strong>Category:</strong> ${provider.category}</p>
+          <p><strong>Static Cost:</strong> ${provider.staticCost.toFixed(2)} (never changes)</p>
+          <p><strong>Inputs:</strong> ${provider.inputs.slice(0, 3).join(', ')}${provider.inputs.length > 3 ? '...' : ''}</p>
+          <p><strong>Output:</strong> ${provider.output}</p>
+        `;
+        canvas.className = 'hover-symbol';
+        break;
+
+      case 'tier':
+        const T = hoveredElement.tier;
+        const tierDesc = T.id === 't0' ? 'Immutable physical laws and exact relationships' :
+                        T.id === 't1' ? 'Scientific methods: analytical, empirical, numerical' :
+                        T.id === 't2' ? 'Design charts and lookup tables' :
+                        'Field experience and engineering judgment';
+        content = `
+          <h4>${T.name}</h4>
+          <p><strong>Type:</strong> ${tierDesc}</p>
+          <p><strong>Static Costs:</strong> ${T.id === 't0' ? '0.00' : T.id === 't1' ? '0.9-1.4' : T.id === 't2' ? '1.1-1.2' : '1.2-1.3'}</p>
+          <p><em>Each provider: multiple inputs → single output</em></p>
+        `;
+        canvas.className = 'hover-pool';
+        break;
+    }
+
+    tooltip.innerHTML = content;
+    tooltip.style.left = tooltipX + 'px';
+    tooltip.style.top = tooltipY + 'px';
+
+    // Adjust tooltip position if it goes off-screen
+    const tooltipRect = tooltip.getBoundingClientRect();
+    if (tooltipRect.right > window.innerWidth) {
+      tooltip.style.left = (mouse.x - tooltipRect.width - 15) + 'px';
+    }
+    if (tooltipRect.bottom > window.innerHeight) {
+      tooltip.style.top = (mouse.y - tooltipRect.height - 10) + 'px';
+    }
+
+    tooltip.classList.add('show');
+  }
+
+  // ---- STATIC TIERS with guaranteed non-overlap ----
+  let tiers = [];
+  function buildTiers(){
+    const R = Math.min(W,H);
+    // Base radii in CSS px (before possible shrink)
+    const baseR = [0.070, 0.100, 0.132, 0.160].map(f=> f*R);
+    let r = baseR.slice();
+    let re = r.map(v => v*OUTER); // outer visual extent per band
+
+    // Compute capacity and shrink radii uniformly if needed so bands + gaps + margins fit vertically
+    const capacity = (H - MT - MB - 3*GAP) / 2; // must satisfy sum(re) <= capacity
+    let sumRe = re.reduce((a,b)=>a+b,0);
+    if (sumRe > capacity && capacity > 0){
+      const s = capacity / sumRe;
+      r  = r.map(v=> v*s);
+      re = re.map(v=> v*s);
+    }
+
+    const y0 = MT + re[0];
+    const y1 = y0 + re[0] + re[1] + GAP;
+    const y2 = y1 + re[1] + re[2] + GAP;
+    const y3 = y2 + re[2] + re[3] + GAP;
+
+    tiers = [
+      { id:'t0', name:'🏛️ Tier 0 — Physical Laws', y: y0, r: r[0], color:'150,100%,60%', label:'0', wall:true },
+      { id:'t1', name:'🔬 Tier 1 — Scientific Methods', y: y1, r: r[1], color:'280,100%,60%', label:'1' },
+      { id:'t2', name:'📊 Tier 2 — Design Charts', y: y2, r: r[2], color:'20,100%,60%',  label:'2' },
+      { id:'t3', name:'🛠️ Tier 3 — Field Experience', y: y3, r: r[3], color:'200,100%,60%', label:'3' }
+    ];
+  }
+  function tierOf(id){ return tiers.find(t=>t.id===id) || tiers[0]; }
+
+  // Generic provider examples representing different calculation approaches
+  const providers = [
+    // Tier 0 — physical laws (exact, immutable)
+    {
+      id:'provider_t0_01',
+      tier:'t0',
+      title:'Physical Law Provider',
+      desc:'Fundamental mathematical relationships and conservation principles that cannot be violated.',
+      staticCost: 0.00,
+      category: 'Fundamental Laws',
+      inputs: ['mass', 'volume', 'water_content'],
+      output: 'unit_weight',
+      meta: {
+        type: 'Exact mathematical relationships',
+        sharedInputs: ['water_content (shared with T1-T3)', 'volume (shared with T2)'],
+        explanation: 'Universal physical laws that form the foundation of all engineering calculations.'
+      }
+    },
+    {
+      id:'provider_t0_02',
+      tier:'t0',
+      title:'Conservation Principle Provider',
+      desc:'Conservation laws and exact identities between soil parameters.',
+      staticCost: 0.00,
+      category: 'Conservation Laws',
+      inputs: ['void_ratio', 'porosity'],
+      output: 'phase_relationship',
+      meta: {
+        type: 'Mathematical identities',
+        sharedInputs: ['void_ratio (shared with T1 numerical models)'],
+        explanation: 'Exact relationships that must be satisfied for physical consistency.'
+      }
+    },
+
+    // Tier 1 — scientific methods (numerical & analytical)
+    {
+      id:'provider_t1_01',
+      tier:'t1',
+      title:'Analytical Method Provider',
+      desc:'Scientifically validated analytical models with laboratory calibration.',
+      staticCost: 0.95,
+      category: 'Analytical Methods',
+      inputs: ['stress_state', 'soil_properties', 'water_content'],
+      output: 'bearing_capacity',
+      meta: {
+        type: 'Laboratory-validated analytical solutions',
+        sharedInputs: ['water_content (shared with all tiers)', 'soil_properties (shared with T2-T3)'],
+        alternatives: 'Multiple analytical approaches available for same output',
+        explanation: 'Rigorous mathematical models based on soil mechanics theory and experimental validation.'
+      }
+    },
+    {
+      id:'provider_t1_02',
+      tier:'t1',
+      title:'Empirical Correlation Provider',
+      desc:'Empirically derived relationships based on extensive experimental data.',
+      staticCost: 0.90,
+      category: 'Empirical Correlations',
+      inputs: ['grain_size', 'density'],
+      output: 'permeability',
+      meta: {
+        type: 'Data-driven empirical relationships',
+        sharedInputs: ['grain_size (shared with T2 charts)', 'density (shared with T3)'],
+        alternatives: 'Several empirical formulas available depending on soil type',
+        explanation: 'Relationships derived from systematic experimental observations and statistical analysis.'
+      }
+    },
+    {
+      id:'provider_t1_03',
+      tier:'t1',
+      title:'Numerical Model Provider',
+      desc:'Advanced numerical simulations and constitutive modeling.',
+      staticCost: 1.40,
+      category: 'Numerical Models',
+      inputs: ['stress_history', 'soil_parameters', 'boundary_conditions'],
+      output: 'settlement_prediction',
+      meta: {
+        type: 'Computational constitutive models',
+        sharedInputs: ['soil_parameters (shared with T1 analytical)', 'stress_history (unique to advanced models)'],
+        alternatives: 'Multiple constitutive models available (Cam-Clay, Duncan-Chang, etc.)',
+        explanation: 'Complex numerical simulations that capture soil behavior under various loading conditions.'
+      }
+    },
+
+    // Tier 2 — design charts (lookup tables)
+    {
+      id:'provider_t2_01',
+      tier:'t2',
+      title:'Lookup Table Provider',
+      desc:'Standardized design charts and correlation tables for practical engineering use.',
+      staticCost: 1.10,
+      category: 'Design Charts',
+      inputs: ['test_results', 'material_properties'],
+      output: 'design_parameters',
+      meta: {
+        type: 'Standardized correlation charts',
+        sharedInputs: ['test_results (shared with T1 empirical)', 'material_properties (shared with all tiers)'],
+        alternatives: 'Multiple charts available for different soil types and test methods',
+        explanation: 'Practical design aids that provide quick estimates based on standardized test procedures.'
+      }
+    },
+    {
+      id:'provider_t2_02',
+      tier:'t2',
+      title:'Correlation Chart Provider',
+      desc:'Graphical correlations between field test results and engineering properties.',
+      staticCost: 1.12,
+      category: 'Correlation Charts',
+      inputs: ['field_test_data', 'soil_classification'],
+      output: 'engineering_properties',
+      meta: {
+        type: 'Field-to-property correlations',
+        sharedInputs: ['soil_classification (shared with T3)', 'field_test_data (unique to field methods)'],
+        alternatives: 'Different correlation charts for SPT, CPT, pressuremeter, etc.',
+        explanation: 'Graphical relationships that convert field test measurements into design parameters.'
+      }
+    },
+
+    // Tier 3 — field experience (practitioner knowledge)
+    {
+      id:'provider_t3_01',
+      tier:'t3',
+      title:'Descriptive Method Provider',
+      desc:'Qualitative assessments and engineering judgment based on field observations.',
+      staticCost: 1.20,
+      category: 'Descriptive Methods',
+      inputs: ['visual_observations', 'field_notes'],
+      output: 'preliminary_assessment',
+      meta: {
+        type: 'Qualitative field assessment',
+        sharedInputs: ['visual_observations (unique to field work)'],
+        alternatives: 'Multiple descriptive approaches based on different field observation methods',
+        explanation: 'Practical engineering judgment and qualitative evaluation for preliminary assessments.'
+      }
+    },
+    {
+      id:'provider_t3_02',
+      tier:'t3',
+      title:'Rules of Thumb Provider',
+      desc:'Simplified relationships and heuristics developed from field experience.',
+      staticCost: 1.25,
+      category: 'Rules of Thumb',
+      inputs: ['basic_measurements', 'engineering_judgment'],
+      output: 'rough_estimate',
+      meta: {
+        type: 'Simplified engineering heuristics',
+        sharedInputs: ['basic_measurements (shared with all tiers)'],
+        alternatives: 'Various rule-of-thumb approaches depending on project type and experience level',
+        explanation: 'Practical approximations and simplified relationships for quick engineering estimates.'
+      }
+    }
+  ];
+
+  // Static orb positions per tier (evenly spaced)
+  const orbs = providers.map((p,i)=>({ p, idx:i }));
+
+  function layoutOrbs(){
+    const centerX = (W*0.5)*dpr;
+    const counts = Object.fromEntries(['t0','t1','t2','t3'].map(id=>[id, providers.filter(pp=>pp.tier===id).length]));
+    const order  = Object.fromEntries(['t0','t1','t2','t3'].map(id=>[id, 0]));
+    orbs.forEach(o=>{
+      const T = tierOf(o.p.tier);
+      const cnt = counts[o.p.tier]||1;
+      const k   = order[o.p.tier]++;
+      const ang = (k / cnt) * TAU;
+      o.x = centerX + Math.cos(ang)*(T.r*dpr*0.90);
+      o.y = (T.y*dpr) + Math.sin(ang)*(T.r*dpr*0.18);
+      o.r = 5*dpr;
+      o.color = T.color;
+    });
+  }
+
+  // Draw once (no animation)
+  function draw(){
+    // clear
+    ctx.save(); ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,H); ctx.restore();
+
+    // backdrop
+    ctx.save(); ctx.scale(dpr,dpr);
+    ctx.fillStyle = 'rgba(10,14,24,0.35)'; ctx.fillRect(0,0,W,H);
+    ctx.restore();
+
+    // tiers
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    tiers.forEach((T)=>{
+      const cx=(W*0.5)*dpr, cy=T.y*dpr, rr=T.r*dpr;
+      const g = ctx.createRadialGradient(cx,cy, rr*0.4, cx,cy, rr*OUTER);
+      g.addColorStop(0, `hsla(${T.color}, 0.16)`);
+      g.addColorStop(1, `hsla(${T.color}, 0)`);
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx,cy, rr*OUTER, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.strokeStyle = `hsla(${T.color}, 0.28)`; ctx.lineWidth = 1.2*dpr; ctx.arc(cx,cy, rr, 0, TAU); ctx.stroke();
+
+      // ring label at right
+      const tx = (W-16)*dpr, ty = cy;
+      ctx.fillStyle = `hsla(${T.color}, 0.95)`; ctx.font = `${12*dpr}px ui-sans-serif`; ctx.textAlign='right'; ctx.textBaseline='middle';
+      ctx.fillText(T.label, tx, ty);
+
+      // band title near left
+      ctx.textAlign='left'; ctx.fillStyle = 'rgba(216,228,255,0.9)'; ctx.font = `${13*dpr}px ui-sans-serif`;
+      ctx.fillText(T.name, (16)*dpr, ty);
+
+      // wall just outside Tier 1 (exact)
+      if (T.wall){
+        const r2= rr*1.18;
+        ctx.beginPath(); ctx.lineWidth=6*dpr; ctx.strokeStyle='hsla(150,100%,70%,0.40)'; ctx.arc(cx,cy,r2,0,TAU); ctx.stroke();
+        ctx.save(); ctx.setLineDash([6*dpr, 10*dpr]); ctx.lineDashOffset = 0;
+        ctx.beginPath(); ctx.lineWidth=3*dpr; ctx.strokeStyle='hsla(150,100%,65%,0.55)'; ctx.arc(cx,cy,r2+8*dpr,0,TAU); ctx.stroke();
+        ctx.restore();
+      }
+    });
+    ctx.restore();
+
+    // orbs with static cost visualization
+    orbs.forEach(o=>{
+      const provider = o.p;
+
+      // Outer glow
+      const g1 = ctx.createRadialGradient(o.x,o.y,0, o.x,o.y, 20*dpr);
+      g1.addColorStop(0, `hsla(${o.color}, 0.6)`);
+      g1.addColorStop(1, `hsla(${o.color}, 0)`);
+      ctx.fillStyle = g1; ctx.beginPath(); ctx.arc(o.x,o.y, 18*dpr, 0, TAU); ctx.fill();
+
+      // Main orb
+      ctx.fillStyle = `hsla(${o.color}, 0.95)`; ctx.beginPath(); ctx.arc(o.x,o.y, o.r, 0, TAU); ctx.fill();
+
+      // Cost indicator ring (thicker for higher costs)
+      const costThickness = Math.max(1, provider.staticCost * 3) * dpr;
+      ctx.strokeStyle = `hsla(${o.color}, 0.7)`;
+      ctx.lineWidth = costThickness;
+      ctx.beginPath(); ctx.arc(o.x,o.y, o.r + costThickness, 0, TAU); ctx.stroke();
+
+      // Static cost text (for hover or detailed view)
+      if (hoveredElement && hoveredElement.type === 'provider' && hoveredElement.orb === o) {
+        ctx.fillStyle = '#ffffff'; ctx.font = `${8*dpr}px ui-sans-serif`; ctx.textAlign='center';
+        ctx.fillText(provider.staticCost.toFixed(2), o.x, o.y - o.r - 8*dpr);
+      }
+    });
+  }
+
+  // Only escape key to close panel (no click functionality)
+  window.addEventListener('keydown', (e)=>{
+    if (e.key==='Escape'){ panel.classList.remove('show'); try{ window.parent.postMessage({source:'spider-anim', cmd:'exit'}, '*'); }catch(_){} }
+  });
+
+  function pickOrb(x,y){ for (const o of orbs){ if (Math.hypot(x-o.x,y-o.y) < 16*dpr) return o; } return null; }
+  function pickTier(x,y){
+    for (const T of tiers){ const cx=(W*0.5)*dpr, cy=T.y*dpr, rr=T.r*dpr*OUTER; if (Math.hypot(x-cx,y-cy) < rr) return T; }
+    return null;
+  }
+  function screenToCanvas(cx,cy){ const r = canvas.getBoundingClientRect(); return {x:(cx-r.left)*dpr, y:(cy-r.top)*dpr}; }
+
+  function openPanel(title, body, kv){
+    pTitle.textContent = title; pBody.innerHTML = body; pKV.innerHTML=''; // Fix: use innerHTML instead of textContent
+    if (kv){ for (const [k,v] of kv){ const s1=document.createElement('small'); s1.textContent=k; const s2=document.createElement('span'); s2.innerHTML=v; pKV.appendChild(s1); pKV.appendChild(s2);} }
+    panel.classList.add('show');
+  }
+  function explainTier(T){
+    let description = '';
+
+    if (T.id === 't0') {
+      description = `
+        <div style="background: rgba(142, 245, 192, 0.1); border: 1px solid rgba(142, 245, 192, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+          <strong style="color: #22c55e;">🔒 IMMUTABLE TIER</strong><br>
+          Fundamental physical laws and exact mathematical relationships that cannot be changed.
+          These are universal principles that form the foundation of all engineering calculations.
+        </div>
+        <p><strong>Provider Types:</strong> Physical law and conservation principle providers</p>
+        <p><strong>Key Characteristics:</strong></p>
+        <ul style="margin: 8px 0; padding-left: 20px;">
+          <li>Zero static cost (π₀ = 0.00) - perfect reliability</li>
+          <li>Exact mathematical relationships</li>
+          <li>Cannot be modified or updated</li>
+          <li>Always available and always correct</li>
+        </ul>
+      `;
+    } else if (T.id === 't1') {
+      description = `
+        <p><strong>Scientific Methods</strong> - Analytical, empirical, and numerical calculation approaches.</p>
+        <p><strong>Provider Types:</strong> Analytical methods, empirical correlations, numerical models</p>
+        <p><strong>Key Characteristics:</strong></p>
+        <ul style="margin: 8px 0; padding-left: 20px;">
+          <li>Low to moderate static costs (π₀ ≈ 0.9-1.4)</li>
+          <li>Scientifically validated approaches</li>
+          <li>Multiple inputs, single output per provider</li>
+          <li>Some inputs shared between providers</li>
+        </ul>
+      `;
+    } else if (T.id === 't2') {
+      description = `
+        <p><strong>Design Charts & Lookup Tables</strong> - Practical correlation charts and standardized tables.</p>
+        <p><strong>Provider Types:</strong> Lookup tables, correlation charts, design nomograms</p>
+        <p><strong>Key Characteristics:</strong></p>
+        <ul style="margin: 8px 0; padding-left: 20px;">
+          <li>Moderate static costs (π₀ ≈ 1.1-1.2)</li>
+          <li>Fast and practical for engineering use</li>
+          <li>Based on extensive empirical data</li>
+          <li>Multiple chart types for same output</li>
+        </ul>
+      `;
+    } else if (T.id === 't3') {
+      description = `
+        <p><strong>Field Experience & Judgment</strong> - Descriptive methods and engineering rules of thumb.</p>
+        <p><strong>Provider Types:</strong> Descriptive assessments, rules of thumb, qualitative methods</p>
+        <p><strong>Key Characteristics:</strong></p>
+        <ul style="margin: 8px 0; padding-left: 20px;">
+          <li>Higher static costs (π₀ ≈ 1.2-1.3)</li>
+          <li>Based on field experience and judgment</li>
+          <li>Flexible but less theoretically rigorous</li>
+          <li>Useful for preliminary assessments</li>
+        </ul>
+      `;
+    }
+
+    description += `
+      <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 12px; margin: 12px 0;">
+        <strong style="color: #3b82f6;">🔗 Provider Architecture:</strong>
+        <ul style="margin: 8px 0; padding-left: 20px;">
+          <li><strong>Multiple Inputs:</strong> Each provider can accept multiple input parameters</li>
+          <li><strong>Single Output:</strong> Each provider produces one specific engineering result</li>
+          <li><strong>Shared Inputs:</strong> Some input parameters are used by multiple providers across tiers</li>
+          <li><strong>Multiple Alternatives:</strong> Different tiers can provide various approaches to the same output</li>
+        </ul>
+      </div>
+
+      <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 12px; margin-top: 12px;">
+        <strong style="color: #f59e0b;">⚠️ Static Costs Only:</strong> These costs (π₀) never change.
+        Unlike dynamic memory, there are no adjustments through AI learning or human feedback.
+        This represents the baseline reliability hierarchy of calculation methods.
+      </div>
+    `;
+
+    openPanel(T.name, description, []);
+  }
+  function explainProvider(p){
+    const T = tierOf(p.tier);
+
+    let description = `
+      <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(96, 165, 250, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+        <p style="margin: 0 0 8px 0;"><strong>Description:</strong> ${p.desc}</p>
+        <p style="margin: 0; color: #60a5fa;"><strong>Tier:</strong> ${T.name}</p>
+        <p style="margin: 0; color: #34d399;"><strong>Category:</strong> ${p.category}</p>
+      </div>
+
+      <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+        <strong style="color: #3b82f6;">🔗 Provider Architecture:</strong><br>
+        <strong>Inputs:</strong> ${p.inputs.join(', ')}<br>
+        <strong>Output:</strong> ${p.output}<br>
+        <small style="color: #1d4ed8;">Each provider accepts multiple inputs but produces a single engineering result</small>
+      </div>
+
+      <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+        <strong style="color: #f59e0b;">📊 Static Cost Information</strong><br>
+        <strong>Static Cost (π₀):</strong> <code style="background: rgba(55, 65, 81, 0.5); color: #fbbf24; padding: 2px 6px; border-radius: 4px;">${p.staticCost.toFixed(2)}</code><br>
+        <small style="color: #d97706;">This cost does NOT change - it's the baseline reliability score</small>
+      </div>
+
+      <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+        <strong style="color: #16a34a;">📋 Provider Details:</strong><br>
+        <strong>Type:</strong> ${p.meta.type}<br>
+        <strong>Shared Inputs:</strong> ${p.meta.sharedInputs ? p.meta.sharedInputs.join('; ') : 'None'}<br>
+        <strong>Alternatives:</strong> ${p.meta.alternatives || 'Various approaches available'}<br>
+        <small style="color: #15803d;">${p.meta.explanation}</small>
+      </div>
+
+      <div style="background: rgba(168, 85, 247, 0.1); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 8px; padding: 12px;">
+        <strong style="color: #a855f7;">🔄 Multiple Provider Concept:</strong><br>
+        <strong>Same Output:</strong> Different tiers can provide various approaches to calculate the same engineering result<br>
+        <strong>Example:</strong> Bearing capacity can be calculated using analytical methods (T1), design charts (T2), or rules of thumb (T3)<br>
+        <small style="color: #7c3aed;">The system chooses the most appropriate provider based on available data and required accuracy</small>
+      </div>
+    `;
+
+    openPanel(p.title, description, []);
+  }
+
+  // start
+  if (document.readyState==='complete' || document.readyState==='interactive') resize();
+  else window.addEventListener('DOMContentLoaded', resize, {once:true});
+})();
+</script>
+</body>
+</html>

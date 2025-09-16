@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Spider — Symbol Pool (Immediate Flow)</title>
+<meta name="theme-color" content="#0b0f1a"/>
+<style>
+  :root{
+    --bg0:#0b0f1a; --bg1:#101a2f; --ink:#e8efff; --muted:#9eb0d7;
+    --pool:#5aa9ff; --s0:#8ef5c0; --parser:#9fb3ff; --mem:#ffd36c;
+  }
+  html,body{height:100%;margin:0; background:radial-gradient(1200px 800px at 50% 18%, var(--bg1) 0%, var(--bg0) 58%, #090e18 100%); color:var(--ink); font:14px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial; overflow:hidden}
+  .stage{position:fixed; inset:0}
+  canvas{position:absolute; inset:0; width:100vw; height:100vh; display:block; background:transparent}
+
+  /* Header/legend */
+  .legend{position:fixed; left:12px; top:12px; display:flex; gap:10px; align-items:center; background:rgba(12,18,32,.45); border:1px solid rgba(60,90,140,.45); border-radius:12px; padding:8px 10px; backdrop-filter:saturate(1.05) blur(6px)}
+  .tag{display:inline-flex; align-items:center; gap:6px; font:700 12px ui-sans-serif; padding:4px 8px; border-radius:999px; border:1px solid rgba(60,90,140,.5); background:rgba(16,24,40,.55)}
+  .dot{width:10px; height:10px; border-radius:50%}
+  .d-pool{background:var(--pool)} .d-s0{background:var(--s0)} .d-parser{background:var(--parser)} .d-mem{background:var(--mem)}
+
+  /* Footer hint */
+  .hint{position:fixed; right:12px; bottom:12px; font:600 11px ui-sans-serif; color:var(--muted); opacity:.75}
+
+  /* Hover tooltip */
+  .tooltip{position:fixed; pointer-events:none; background:rgba(15,23,42,0.95); border:1px solid #374151; border-radius:8px; padding:12px; max-width:300px; font-size:13px; line-height:1.4; z-index:1000; opacity:0; transition:opacity 0.2s ease; backdrop-filter:blur(8px);}
+  .tooltip.show{opacity:1;}
+  .tooltip h4{margin:0 0 8px 0; color:#60a5fa; font-size:14px;}
+  .tooltip p{margin:0 0 6px 0;}
+  .tooltip strong{color:#34d399;}
+
+  /* Enhanced hover effects */
+  .hover-source{cursor:pointer !important;}
+  .hover-symbol{cursor:pointer !important;}
+  .hover-pool{cursor:pointer !important;}
+
+  @media (max-width: 900px){ .legend{display:none} .hint{display:none} }
+</style>
+</head>
+<body>
+<div class="stage">
+  <canvas id="fx"></canvas>
+  <div class="legend" aria-hidden="true">
+    <div class="legend-section">
+      <h4 style="margin:0 0 6px 0; color:#60a5fa; font-size:10px;">Data Flow</h4>
+      <span class="tag"><i class="dot d-parser"></i>Parser Input</span>
+      <span class="tag"><i class="dot d-mem"></i>Dynamic Memory</span>
+      <span class="tag"><i class="dot d-pool"></i>Σ Symbol Pool</span>
+      <span class="tag"><i class="dot d-s0"></i>S₀ Target Output</span>
+    </div>
+  </div>
+  <div class="hint">
+    🎯 <strong>Hover</strong> symbols & sources for details • Symbols auto-flow into Σ • <strong>R</strong> replay • <strong>Esc</strong> close
+  </div>
+  <div class="tooltip" id="tooltip"></div>
+</div>
+
+<script>
+(function(){
+  const TAU = Math.PI*2;
+  const canvas = document.getElementById('fx');
+  const ctx = canvas.getContext('2d');
+  const tooltip = document.getElementById('tooltip');
+
+  // Mouse tracking for hover effects
+  let mouse = {x: 0, y: 0, canvasX: 0, canvasY: 0};
+  let hoveredElement = null;
+
+  window.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+    mouse.canvasX = (e.clientX - rect.left) * dpr;
+    mouse.canvasY = (e.clientY - rect.top) * dpr;
+    updateHover();
+  }, {passive: true});
+
+  let dpr = Math.max(1, Math.min(2.5, window.devicePixelRatio||1));
+  let W=0,H=0; let CX=0,CY=0; let POOL_R=0;
+  function resize(){
+    const rect = canvas.getBoundingClientRect();
+    W = Math.max(1, Math.floor((rect.width||window.innerWidth||800)));
+    H = Math.max(1, Math.floor((rect.height||window.innerHeight||600)));
+    canvas.width  = Math.max(1, Math.floor(W*dpr));
+    canvas.height = Math.max(1, Math.floor(H*dpr));
+    CX = (W*0.60)*dpr; CY = (H*0.52)*dpr; POOL_R = Math.min(W,H)*0.30*dpr;
+    layoutSources();
+    layoutTargets();
+    reset(true);
+  }
+  window.addEventListener('resize', resize, {passive:true});
+
+  // Hover detection and tooltip management
+  function updateHover() {
+    let newHoveredElement = null;
+
+    // Check for symbol hover
+    for (const item of items) {
+      const dx = mouse.canvasX - item.x;
+      const dy = mouse.canvasY - item.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance < 20 * dpr) {
+        newHoveredElement = { type: 'symbol', item: item };
+        break;
+      }
+    }
+
+    // Check for source hover
+    if (!newHoveredElement) {
+      const parserDist = Math.sqrt(
+        (mouse.canvasX - src.parser.x) ** 2 + (mouse.canvasY - src.parser.y) ** 2
+      );
+      if (parserDist < 25 * dpr) {
+        newHoveredElement = { type: 'source', source: 'parser' };
+      } else {
+        const memDist = Math.sqrt(
+          (mouse.canvasX - src.mem.x) ** 2 + (mouse.canvasY - src.mem.y) ** 2
+        );
+        if (memDist < 25 * dpr) {
+          newHoveredElement = { type: 'source', source: 'mem' };
+        }
+      }
+    }
+
+    // Check for pool hover
+    if (!newHoveredElement) {
+      const poolDist = Math.sqrt(
+        (mouse.canvasX - CX) ** 2 + (mouse.canvasY - CY) ** 2
+      );
+      if (poolDist < POOL_R) {
+        newHoveredElement = { type: 'pool' };
+      }
+    }
+
+    // Check for target output hover
+    if (!newHoveredElement) {
+      const targetDist = Math.sqrt(
+        (mouse.canvasX - targetOutput.x) ** 2 + (mouse.canvasY - targetOutput.y) ** 2
+      );
+      if (targetDist < 25 * dpr) {
+        newHoveredElement = { type: 'target' };
+      }
+    }
+
+    // Update tooltip
+    if (newHoveredElement !== hoveredElement) {
+      hoveredElement = newHoveredElement;
+      updateTooltip();
+    }
+  }
+
+  function updateTooltip() {
+    if (!hoveredElement) {
+      tooltip.classList.remove('show');
+      canvas.className = '';
+      return;
+    }
+
+    let content = '';
+    let tooltipX = mouse.x + 15;
+    let tooltipY = mouse.y - 10;
+
+    switch (hoveredElement.type) {
+      case 'symbol':
+        const item = hoveredElement.item;
+        const costInfo = item.state === 'pool' ? '<p><strong>Cost Status:</strong> Actively adjusted by AI learning and human feedback</p>' : '';
+        content = `
+          <h4>📊 Symbol: ${item.key}</h4>
+          <p><strong>Source:</strong> ${item.source === 'parser' ? 'Parser/NLP Input' : 'Dynamic Memory'}</p>
+          <p><strong>Status:</strong> ${item.state === 'pool' ? 'In Σ Symbol Pool (Ready for Calculation)' : item.state === 'inflight' ? 'Flowing to Symbol Pool' : 'Waiting at Source'}</p>
+          ${costInfo}
+          <p><strong>Role:</strong> This engineering parameter will be combined with others for calculations.</p>
+          <p><em>Part of the complete symbol set used for geotechnical analysis.</em></p>
+        `;
+        canvas.className = 'hover-symbol';
+        break;
+
+      case 'source':
+        const source = hoveredElement.source;
+        content = source === 'parser' ?
+          `<h4>🔍 Parser/NLP Input</h4>
+          <p>Provides symbols extracted from user input text and field notes.</p>
+          <p><strong>Examples:</strong> Gs=2.65, e=0.45, soil_type="SW"</p>
+          <p><em>Converts natural language into structured engineering parameters.</em></p>` :
+          `<h4>🧠 Dynamic Memory</h4>
+          <p>Contains symbols from previous user sessions and calculations.</p>
+          <p><strong>Includes:</strong> Past results, learned preferences, and historical data</p>
+          <p><em>Remembers context from previous interactions.</em></p>`;
+        canvas.className = 'hover-source';
+        break;
+
+      case 'pool':
+        content = `
+          <h4>🎯 Σ Symbol Pool</h4>
+          <p>The central collection point where all engineering symbols are combined.</p>
+          <p><strong>Data Sources:</strong></p>
+          <ul style="margin:8px 0; padding-left:20px;">
+            <li>Parser/NLP: Fresh symbols from user input</li>
+            <li>Dynamic Memory: Past session symbols</li>
+            <li>Cost Adjustments: AI learning + Human feedback</li>
+          </ul>
+          <p><strong>Process:</strong> Symbols are prioritized by their cost scores, then fed into calculation engines.</p>
+          <p><em>The complete symbol set ready for geotechnical analysis.</em></p>
+        `;
+        canvas.className = 'hover-pool';
+        break;
+
+      case 'target':
+        content = `
+          <h4>📤 S₀ Target Output</h4>
+          <p>The single final result from processing all symbols in the Σ pool.</p>
+          <p><strong>Source:</strong> Mathematical calculation using prioritized symbols from Σ pool</p>
+          <p><strong>Examples:</strong></p>
+          <ul style="margin:8px 0; padding-left:20px;">
+            <li>Foundation bearing capacity = 150 kPa</li>
+            <li>Settlement prediction = 25mm</li>
+            <li>Slope stability factor = 1.35</li>
+          </ul>
+          <p><strong>Process:</strong> Cost-adjusted symbols → Calculation engine → Single S₀ result</p>
+          <p><em>The definitive answer to the user's geotechnical engineering question.</em></p>
+        `;
+        canvas.className = 'hover-pool';
+        break;
+    }
+
+    tooltip.innerHTML = content;
+    tooltip.style.left = tooltipX + 'px';
+    tooltip.style.top = tooltipY + 'px';
+
+    // Adjust tooltip position if it goes off-screen
+    const tooltipRect = tooltip.getBoundingClientRect();
+    if (tooltipRect.right > window.innerWidth) {
+      tooltip.style.left = (mouse.x - tooltipRect.width - 15) + 'px';
+    }
+    if (tooltipRect.bottom > window.innerHeight) {
+      tooltip.style.top = (mouse.y - tooltipRect.height - 10) + 'px';
+    }
+
+    tooltip.classList.add('show');
+  }
+
+  // --- Sources (badges) ---
+  const src = { parser:{x:0,y:0}, mem:{x:0,y:0} };
+  function layoutSources(){
+    src.parser.x = (W*0.18)*dpr; src.parser.y = (H*0.35)*dpr;
+    src.mem.x    = (W*0.22)*dpr; src.mem.y    = (H*0.70)*dpr;
+    targetOutput.x = (W*0.85)*dpr; targetOutput.y = (H*0.35)*dpr;
+  }
+
+  // --- Canonical, readable keys ---
+  const KEYS_PARSER = ['Gs','e','rho_d','w','suction','soil_type'];
+  const KEYS_MEM    = ['S','n','Se','OMC','rho','phi','gamma','Sw_max','Sw_min','vg_n','vg_m','vg_n_w','vg_m_w','alpha_p_c','omega_prime'];
+
+  // Target output (single result from calculations)
+  const targetOutput = {
+    x: 0, y: 0,
+    label: 'S₀',
+    description: 'Final calculation result',
+    value: null,
+    active: false
+  };
+
+  const items = [];
+  KEYS_PARSER.forEach((k,i)=> items.push(makeItem(k,'parser',i)) );
+  KEYS_MEM.forEach((k,i)=> items.push(makeItem(k,'mem',i)) );
+
+  function makeItem(key, source, i){
+    return {
+      key, source,
+      state: 'queue', // 'queue' (start at source) → 'inflight' → 'pool'
+      a: Math.random()*TAU, r: 26*dpr + Math.random()*34*dpr, wob: Math.random()*TAU,
+      t: 0,
+      x:0,y:0, tx:0,ty:0, cx:0,cy:0
+    };
+  }
+
+  // target slots inside circle
+  let slots = [];
+  function layoutTargets(){
+    slots = [];
+    const pad = 20*dpr, rChip = 16*dpr;
+    const inner = POOL_R - (pad + rChip);
+    const total = Math.max(1, items.length);
+    const rings = 3;
+    for(let ri=0;ri<rings;ri++){
+      const rr = inner*(0.60 + 0.20*ri);
+      const count = Math.ceil(total / rings);
+      for(let j=0;j<count;j++){
+        const ang = (j/count)*TAU + (ri*0.22);
+        const x = CX + Math.cos(ang)*rr;
+        const y = CY + Math.sin(ang)*rr;
+        slots.push({x,y,used:false});
+      }
+    }
+    const shuffled = items.slice().sort(()=>Math.random()-0.5);
+    for (const it of shuffled){
+      const s = slots.find(s=>!s.used) || slots[0];
+      it.tx = s.x; it.ty = s.y; s.used=true;
+      const sx = (it.source==='parser'? src.parser.x : src.mem.x);
+      const sy = (it.source==='parser'? src.parser.y : src.mem.y);
+      const mid = midpoint(sx,sy, it.tx,it.ty);
+      it.cx = mid.x + (Math.random()*2-1)*40*dpr;
+      it.cy = mid.y - 60*dpr + (Math.random()*2-1)*20*dpr;
+    }
+  }
+
+  function midpoint(x1,y1,x2,y2){ return {x:(x1+x2)/2, y:(y1+y2)/2}; }
+  function bezier(x1,y1, cx,cy, x2,y2, t){ const u=1-t; return { x: u*u*x1 + 2*u*t*cx + t*t*x2, y: u*u*y1 + 2*u*t*cy + t*t*y2 }; }
+
+  // autoplay: immediate flow into pool
+  let lastLaunch = 0; const LAUNCH_EVERY = 140; // ms
+  let started = false;
+
+  // interactions
+  window.addEventListener('keydown',(e)=>{
+    if (e.key==='Escape'){ try{ window.parent.postMessage({source:'spider-anim', cmd:'exit'}, '*'); }catch(_){} }
+    if (e.key==='r' || e.key==='R'){ reset(); }
+  });
+
+  function reset(skipDelay=false){
+    for (const it of items){ it.state='queue'; it.t=0; it.a=Math.random()*TAU; it.r=26*dpr + Math.random()*34*dpr; }
+    lastLaunch = performance.now() + (skipDelay? 100 : 600); // tiny gather, then fly
+    started = true;
+  }
+
+  // Enhanced chips with cost display
+  function chip(text, x, y, col='rgba(16,24,40,0.82)', showCost=false, costValue=1.0){
+    ctx.save();
+    const padX=8*dpr; ctx.font = `${12*dpr}px ui-sans-serif`; const tw = ctx.measureText(text).width;
+    const w = Math.max(42*dpr, tw + padX*2), h = showCost ? 24*dpr : 18*dpr; const rx = 9*dpr;
+
+    // Main chip background
+    ctx.fillStyle = col; roundRect(ctx, x-w/2, y-h/2, w, h, rx); ctx.fill();
+    ctx.strokeStyle='rgba(46,69,116,0.9)'; ctx.lineWidth=1*dpr; roundRect(ctx, x-w/2, y-h/2, w, h, rx); ctx.stroke();
+
+    // Cost indicator bar (if showing cost)
+    if (showCost) {
+      const costBarHeight = 3*dpr;
+      const costBarY = y + h/2 - costBarHeight - 2*dpr;
+      const costBarWidth = Math.min(w - 8*dpr, (costValue / 2) * (w - 8*dpr)); // Scale based on cost
+
+      ctx.fillStyle = costValue > 1.2 ? 'rgba(239,68,68,0.8)' : costValue < 0.8 ? 'rgba(34,197,94,0.8)' : 'rgba(156,163,175,0.8)';
+      roundRect(ctx, x - costBarWidth/2, costBarY, costBarWidth, costBarHeight, 1.5*dpr);
+      ctx.fill();
+    }
+
+    // Symbol text
+    ctx.fillStyle='#eaf3ff'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(text, x, y - (showCost ? 2*dpr : 0.5*dpr));
+
+    // Cost value text (if showing)
+    if (showCost) {
+      ctx.font = `${9*dpr}px ui-sans-serif`;
+      ctx.fillStyle = costValue > 1.2 ? '#fca5a5' : costValue < 0.8 ? '#86efac' : '#d1d5db';
+      ctx.fillText(costValue.toFixed(2), x, y + h/2 - 4*dpr);
+    }
+
+    ctx.restore();
+  }
+  function roundRect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+  // main loop
+  let last=0; resize();
+  (function loop(ts){
+    requestAnimationFrame(loop);
+    const dt = Math.min(0.06, (ts-last)/1000||0.016); last = ts;
+
+    // backdrop
+    ctx.save(); ctx.scale(dpr,dpr); ctx.globalCompositeOperation='source-over';
+    ctx.fillStyle = 'rgba(10,14,24,0.35)'; ctx.fillRect(0,0,W,H); ctx.restore();
+
+    // pool halo & ring
+    const g = ctx.createRadialGradient(CX,CY, POOL_R*0.4, CX,CY, POOL_R*1.22);
+    g.addColorStop(0, 'rgba(90,169,255,0.16)'); g.addColorStop(1, 'rgba(90,169,255,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(CX,CY, POOL_R*1.22, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.lineWidth=1.4*dpr; ctx.strokeStyle='rgba(90,169,255,0.38)'; ctx.arc(CX,CY, POOL_R, 0, TAU); ctx.stroke();
+    ctx.fillStyle='#cfe3ff'; ctx.font=`${14*dpr}px ui-sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('Σ — Symbol pool', CX, CY-POOL_R-20*dpr);
+
+    // draw sources
+    drawSource(src.parser.x, src.parser.y, 'Parser / NLP', '#9fb3ff');
+    drawSource(src.mem.x,    src.mem.y,    'Dynamic Memory', '#ffd36c');
+
+    // draw target output
+    drawTargetOutput();
+
+    // update items
+    for (const it of items){
+      const sx = (it.source==='parser'? src.parser.x : src.mem.x);
+      const sy = (it.source==='parser'? src.parser.y : src.mem.y);
+      if (it.state==='queue'){
+        it.wob += dt*(0.9+Math.random()*0.2);
+        it.a += dt*(0.7 + (it.source==='parser'?0.1:0));
+        const rr = it.r + 3*dpr*Math.sin(it.wob);
+        it.x = sx + Math.cos(it.a)*rr;
+        it.y = sy + Math.sin(it.a)*rr;
+      }
+      else if (it.state==='inflight'){
+        it.t = Math.min(1, it.t + dt*0.8);
+        const p = bezier(sx,sy, it.cx,it.cy, it.tx,it.ty, it.t);
+        it.x = p.x; it.y = p.y;
+        // beam
+        ctx.save(); ctx.globalCompositeOperation='lighter';
+        ctx.strokeStyle = it.source==='parser'? `rgba(159,179,255,${(1-it.t).toFixed(2)})` : `rgba(255,211,108,${(1-it.t).toFixed(2)})`;
+        ctx.lineWidth = 3*dpr*(1-it.t);
+        ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(it.x, it.y); ctx.stroke();
+        ctx.restore();
+        if (it.t>=1){ it.state='pool'; }
+      }
+      else if (it.state==='pool'){
+        // gentle drift/orbit INSIDE the circle (clamped)
+        const ang = Math.atan2(it.y-CY, it.x-CX) + dt*0.18;
+        let rad = Math.hypot(it.x-CX, it.y-CY) + Math.sin(ts*0.001+it.x)*0.5;
+        const maxR = POOL_R - 20*dpr; if (rad>maxR) rad = maxR; if (rad<12*dpr) rad=12*dpr;
+        it.x = CX + Math.cos(ang)*rad; it.y = CY + Math.sin(ang)*rad;
+      }
+    }
+
+    // auto launch immediately (sequential, fast)
+    if (started && ts > lastLaunch){
+      lastLaunch = ts + LAUNCH_EVERY;
+      const pending = items.filter(it=>it.state==='queue');
+      if (pending.length){ const it = pending[Math.floor(Math.random()*pending.length)]; it.state='inflight'; it.t=0; }
+    }
+
+    // draw chips with cost information
+    const list = items.slice().sort((a,b)=> (a.state==='pool')?1:-1);
+    for (const it of list){
+      const bg = it.state==='pool'? 'rgba(16,40,28,0.90)' : (it.source==='parser'?'rgba(16,24,40,0.72)':'rgba(44,36,14,0.72)');
+
+      // Show cost for symbols in pool
+      const showCost = it.state === 'pool';
+      const costValue = showCost ? (0.8 + Math.sin(ts * 0.002 + it.x * 0.01) * 0.4) : 1.0; // Animated cost
+
+      chip(it.key, it.x, it.y, bg, showCost, costValue);
+
+      if (it.state==='pool'){
+        const grad = ctx.createRadialGradient(it.x,it.y,0, it.x,it.y, 18*dpr);
+        grad.addColorStop(0,'rgba(142,245,192,0.7)'); grad.addColorStop(1,'rgba(142,245,192,0)');
+        ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(it.x,it.y, 18*dpr,0,TAU); ctx.fill();
+      }
+    }
+  })();
+
+  function drawSource(x,y,label,color){
+    const g = ctx.createRadialGradient(x,y,0, x,y, 40*dpr);
+    g.addColorStop(0, hexToRgba(color,0.28)); g.addColorStop(1, hexToRgba(color,0));
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y, 40*dpr, 0, TAU); ctx.fill();
+    ctx.fillStyle='rgba(20,24,36,0.88)'; ctx.beginPath(); ctx.arc(x,y, 18*dpr, 0, TAU); ctx.fill();
+    ctx.strokeStyle='rgba(60,90,140,0.9)'; ctx.lineWidth=1*dpr; ctx.beginPath(); ctx.arc(x,y,18*dpr,0,TAU); ctx.stroke();
+    chip(label, x, y + 28*dpr, 'rgba(16,24,40,0.82)');
+  }
+
+  function drawTargetOutput(){
+    const {x, y, label} = targetOutput;
+
+    // Outer glow
+    const glow = ctx.createRadialGradient(x,y,0, x,y, 50*dpr);
+    glow.addColorStop(0, 'rgba(142,245,192,0.3)'); glow.addColorStop(1, 'rgba(142,245,192,0)');
+    ctx.fillStyle=glow; ctx.beginPath(); ctx.arc(x,y, 50*dpr, 0, TAU); ctx.fill();
+
+    // Main circle
+    ctx.fillStyle='rgba(20,24,36,0.9)'; ctx.beginPath(); ctx.arc(x,y, 20*dpr, 0, TAU); ctx.fill();
+    ctx.strokeStyle='rgba(142,245,192,0.8)'; ctx.lineWidth=2*dpr; ctx.beginPath(); ctx.arc(x,y,20*dpr,0,TAU); ctx.stroke();
+
+    // Inner highlight
+    ctx.fillStyle='rgba(142,245,192,0.6)'; ctx.beginPath(); ctx.arc(x-5*dpr,y-5*dpr, 6*dpr, 0, TAU); ctx.fill();
+
+    // Label
+    ctx.fillStyle='#eaf3ff'; ctx.font=`${11*dpr}px ui-sans-serif`; ctx.textAlign='center';
+    ctx.fillText(label, x, y + 30*dpr);
+
+    // Connection from pool to target
+    const connectionOpacity = Math.sin(Date.now() * 0.003) * 0.3 + 0.4;
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.strokeStyle = `rgba(142,245,192,${connectionOpacity})`;
+    ctx.lineWidth = 2*dpr;
+    ctx.setLineDash([8*dpr, 4*dpr]);
+    ctx.beginPath();
+    ctx.moveTo(CX + POOL_R, CY);
+    ctx.quadraticCurveTo((CX + x)/2, (CY + y)/2 - 30*dpr, x - 25*dpr, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  function hexToRgba(hex, a){
+    const h = hex.trim();
+    const m = h.match(/#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i); if(!m) return `rgba(255,255,255,${a})`;
+    const r=parseInt(m[1],16), g=parseInt(m[2],16), b=parseInt(m[3],16); return `rgba(${r},${g},${b},${a})`;
+  }
+
+  // start
+  if (document.readyState==='complete' || document.readyState==='interactive') resize();
+  else window.addEventListener('DOMContentLoaded', resize, {once:true});
+})();
+</script>
+</body>
+</html>
