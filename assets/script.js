@@ -5,6 +5,7 @@
   const ctx = c.getContext('2d');
   let W = 0, H = 0, DPR = Math.max(1, Math.min(2.5, window.devicePixelRatio || 1));
   let nodes = [], edges = [], ripples = [];
+  const ENABLE_GRAPH = false; // disable symbol-network graph; keep mesh/ripples
 
   function sizeCanvas(){
     const hero = document.querySelector('.hero');
@@ -33,6 +34,7 @@
   function initGraph(){
     sizeCanvas();
     nodes = []; edges = [];
+    if (!ENABLE_GRAPH) return;
     const N = Math.min(160, Math.max(90, Math.floor(W/10)));
     for (let i=0;i<N;i++){
       const t = i / N;
